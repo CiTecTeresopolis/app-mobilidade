@@ -1,8 +1,8 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -14,16 +14,24 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Card, Divider, IconButton, Menu, Text } from "react-native-paper";
+import {
+  Badge,
+  Card,
+  Divider,
+  IconButton,
+  Menu,
+  Text,
+} from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // 1. Interfaces
 interface ActionCardProps {
-  icon: any;
+  icon: keyof typeof MaterialCommunityIcons.hasIcon | string;
   title: string;
   subtitle: string;
   onPress: () => void;
   color: string;
+  badgeCount?: number;
 }
 
 const ActionCard = ({
@@ -32,6 +40,7 @@ const ActionCard = ({
   subtitle,
   onPress,
   color,
+  badgeCount,
 }: ActionCardProps) => (
   <TouchableOpacity
     onPress={onPress}
@@ -41,7 +50,12 @@ const ActionCard = ({
     <Card style={styles.actionCard}>
       <Card.Content style={styles.actionCardContent}>
         <View style={[styles.iconContainer, { backgroundColor: `${color}20` }]}>
-          <MaterialCommunityIcons name={icon} size={30} color={color} />
+          <MaterialCommunityIcons name={icon as any} size={30} color={color} />
+          {badgeCount !== undefined && badgeCount > 0 && (
+            <Badge style={styles.badgeStyle} size={18}>
+              {badgeCount}
+            </Badge>
+          )}
         </View>
         <View style={styles.textContainer}>
           <Text variant="titleMedium" style={styles.cardTitle}>
@@ -68,6 +82,8 @@ const Home = () => {
   const [loading, setLoading] = useState(true);
   const [statusAtivo, setStatusAtivo] = useState<boolean | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [driverId, setDriverId] = useState<string | null>(null);
 
   const API_URL =
     "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api";
@@ -76,42 +92,110 @@ const Home = () => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem("token");
+
       if (!token) {
         router.replace("/");
         return;
       }
+
       const profileRes = await fetch(`${API_URL}/drivers/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "ngrok-skip-browser-warning": "true",
         },
       });
+
       if (!profileRes.ok) throw new Error("Erro ao buscar perfil");
+
       const profileData = await profileRes.json();
-      setUserName(profileData.name);
+      setUserName(profileData.name || "Motorista");
       setCurrentCity(profileData.address || "Teresópolis");
       setStatusAtivo(profileData.ativo);
+      setDriverId(profileData.id);
+
+      // Busca contagem de notificações não lidas
+      const notifyRes = await fetch(
+        `${API_URL}/auth/notifications/unread-count/${profileData.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "ngrok-skip-browser-warning": "true",
+          },
+        },
+      );
+
+      if (notifyRes.ok) {
+        const notifyData = await notifyRes.json();
+        setUnreadNotifications(notifyData.count || 0);
+      }
     } catch (error) {
-      console.error("Erro:", error);
+      console.error("Erro ao carregar Dashboard:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const status =
-    statusAtivo === true
-      ? { text: "Aprovado", color: "#a7c080", icon: "check-circle" }
-      : statusAtivo === false
-        ? { text: "Em Análise", color: "#f8d7da", icon: "clock-outline" }
-        : { text: "Pendente", color: "#8a9685", icon: "alert-circle-outline" };
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData();
+    }, []),
+  );
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
+  const handlePressNotifications = async () => {
+    // 1. ZERA O CONTADOR VISUALMENTE NA HORA
+    // Isso faz o badge sumir antes mesmo de falar com o servidor
+    setUnreadNotifications(0);
+
+    try {
+      const token = await AsyncStorage.getItem("token");
+
+      // 2. Tenta pegar o ID do motorista (seja do estado ou do storage)
+      const idAtual = driverId || (await AsyncStorage.getItem("userId"));
+
+      if (idAtual && token) {
+        // 3. Chamada para o banco (usamos await aqui para garantir o processo)
+        const response = await fetch(
+          `${API_URL}/auth/notifications/read-all/${idAtual}`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              "ngrok-skip-browser-warning": "true",
+            },
+          },
+        );
+
+        const resData = await response.json();
+        console.log("Resposta do servidor:", resData);
+      }
+    } catch (error) {
+      console.error("Erro ao limpar notificações:", error);
+    }
+
+    // 4. Navega para a tela de agenda
+    router.push("/motorista/agenda");
+  };
+
+  const getStatusConfig = () => {
+    if (statusAtivo === true) {
+      return { text: "Aprovado", color: "#a7c080", icon: "check-circle" };
+    } else if (statusAtivo === false) {
+      return { text: "Em Análise", color: "#f8d7da", icon: "clock-outline" };
+    } else {
+      return {
+        text: "Pendente",
+        color: "#8a9685",
+        icon: "alert-circle-outline",
+      };
+    }
+  };
+
+  const status = getStatusConfig();
 
   const handleLogout = async () => {
     setMenuVisible(false);
-    await AsyncStorage.removeItem("token");
+    await AsyncStorage.multiRemove(["token", "user_seguranca"]);
     router.replace("/");
   };
 
@@ -120,24 +204,16 @@ const Home = () => {
     bundleId: string,
     appId: string,
   ) => {
-    // URLs das Lojas
     const playStoreUrl = `https://play.google.com/store/apps/details?id=${bundleId}`;
     const appStoreUrl = `https://apps.apple.com/br/app/id${appId}`;
-
-    // Define qual URL de loja usar baseado no sistema
     const storeUrl = Platform.OS === "ios" ? appStoreUrl : playStoreUrl;
     const appUrl = `${scheme}://`;
 
     try {
       const canOpen = await Linking.canOpenURL(appUrl);
-
-      if (canOpen) {
-        await Linking.openURL(appUrl);
-      } else {
-        await Linking.openURL(storeUrl);
-      }
+      if (canOpen) await Linking.openURL(appUrl);
+      else await Linking.openURL(storeUrl);
     } catch (err) {
-      // Se falhar qualquer verificação, abre a loja
       await Linking.openURL(storeUrl);
     }
   };
@@ -147,21 +223,14 @@ const Home = () => {
       <StatusBar style="light" />
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          {loading ? (
-            <ActivityIndicator color="#a7c080" size="small" />
-          ) : (
-            <>
-              <Text variant="headlineSmall" style={styles.welcomeText}>
-                Olá, {userName.split(" ")[0] || "Motorista"}
-              </Text>
-              <Text variant="bodyMedium" style={styles.cityText}>
-                {currentCity}
-              </Text>
-            </>
-          )}
+          <Text variant="headlineSmall" style={styles.welcomeText}>
+            Olá, {loading ? "..." : userName.split(" ")[0]}
+          </Text>
+          <Text variant="bodyMedium" style={styles.cityText}>
+            {loading ? "Carregando..." : currentCity}
+          </Text>
         </View>
 
         <Menu
@@ -180,8 +249,8 @@ const Home = () => {
           <Menu.Item
             leadingIcon="account-circle"
             onPress={() => {
-              router.push("/motorista/perfil");
               setMenuVisible(false);
+              router.push("/motorista/perfil");
             }}
             title="Meu Perfil"
             titleStyle={styles.menuItemText}
@@ -196,31 +265,37 @@ const Home = () => {
         </Menu>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* CARD DE STATUS */}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <Card style={styles.statsCard}>
           <ImageBackground
             source={require("../../assets/images/logoTere1.jpg")}
             style={styles.statsBackground}
-            imageStyle={{ borderRadius: 16, opacity: 0.3 }}
+            imageStyle={{ borderRadius: 16, opacity: 0.15 }}
           >
             <View style={styles.statsOverlay}>
-              <View style={styles.statItem}>
-                <MaterialCommunityIcons
-                  name={status.icon as any}
-                  size={40}
-                  color={status.color}
-                />
-                <Text
-                  variant="headlineSmall"
-                  style={[styles.statNumber, { color: status.color }]}
-                >
-                  {status.text}
-                </Text>
-                <Text variant="bodySmall" style={styles.statLabel}>
-                  Status da Conta
-                </Text>
-              </View>
+              {loading ? (
+                <ActivityIndicator color="#a7c080" />
+              ) : (
+                <View style={styles.statItem}>
+                  <MaterialCommunityIcons
+                    name={status.icon as any}
+                    size={44}
+                    color={status.color}
+                  />
+                  <Text
+                    variant="headlineSmall"
+                    style={[styles.statNumber, { color: status.color }]}
+                  >
+                    {status.text}
+                  </Text>
+                  <Text variant="bodySmall" style={styles.statLabel}>
+                    Status da Conta
+                  </Text>
+                </View>
+              )}
             </View>
           </ImageBackground>
         </Card>
@@ -238,16 +313,25 @@ const Home = () => {
             onPress={() => router.push("/motorista/documentos")}
           />
           <ActionCard
-            icon="bell"
+            icon="bell-outline"
             title="Notificações"
-            subtitle="Verificar avaliações"
+            subtitle={
+              unreadNotifications > 0
+                ? `Você tem ${unreadNotifications} novas`
+                : "Alertas do sistema"
+            }
             color="#d3e397"
-            onPress={() => router.push("/motorista/agenda")}
+            badgeCount={unreadNotifications}
+            onPress={() => {
+              console.log("Cliquei!");
+              setUnreadNotifications(0);
+              handlePressNotifications();
+            }}
           />
           <ActionCard
             icon="star-face"
             title="Avaliações"
-            subtitle="Verificar avaliações"
+            subtitle="Notas dos passageiros"
             color="#d3e397"
             onPress={() => router.push("/motorista/avaliacao")}
           />
@@ -259,7 +343,7 @@ const Home = () => {
             onPress={async () => {
               const url =
                 "https://www.teresopolis.rj.gov.br/transparencia/legislacao/";
-              if (await Linking.canOpenURL(url)) await Linking.openURL(url);
+              await Linking.openURL(url);
             }}
           />
         </View>
@@ -275,8 +359,12 @@ const Home = () => {
           {[
             {
               img: require("../../assets/images/whatsapp.png"),
-              onPress: () =>
-                openStoreOrApp("whatsapp", "com.whatsapp.app", "310633997"),
+              onPress: () => {
+                const url = "https://wa.me/5521972088235";
+                Linking.openURL(url).catch((err) =>
+                  console.error("Erro ao abrir o WhatsApp", err),
+                );
+              },
             },
             {
               img: require("../../assets/images/digipare.png"),
@@ -287,11 +375,6 @@ const Home = () => {
               img: require("../../assets/images/vai_de_on.png"),
               onPress: () =>
                 openStoreOrApp("vai_de_on", "com.VaiDeOn.app", "6464055396"),
-            },
-            {
-              img: require("../../assets/images/logo1.jpg"),
-
-              route: "/contato",
             },
           ].map((item, index) => (
             <TouchableOpacity
@@ -308,11 +391,11 @@ const Home = () => {
 
         <View style={styles.footerBar}>
           <Image
-            source={require("../../assets/images/logo1.jpg")}
+            source={require("../../assets/images/logo-guarda.png")}
             style={styles.logoA}
           />
           <Image
-            source={require("../../assets/images/logoTere1.jpg")}
+            source={require("../../assets/images/logo-smct.png")}
             style={styles.logoB}
           />
         </View>
@@ -337,17 +420,22 @@ const styles = StyleSheet.create({
   menuContent: { backgroundColor: "#3e4a39", borderRadius: 8, marginTop: 40 },
   menuItemText: { color: "#fff", fontSize: 16 },
   menuDivider: { backgroundColor: "#2d3629" },
-  statsCard: { marginVertical: 10, borderRadius: 16, elevation: 4 },
+  statsCard: {
+    marginVertical: 10,
+    borderRadius: 16,
+    elevation: 4,
+    backgroundColor: "#3e4a39",
+  },
   statsBackground: { width: "100%", height: 160 },
   statsOverlay: {
     flex: 1,
-    backgroundColor: "rgba(45, 54, 41, 0.7)",
+    backgroundColor: "rgba(45, 54, 41, 0.6)",
     justifyContent: "center",
     alignItems: "center",
   },
   statItem: { alignItems: "center" },
-  statNumber: { fontWeight: "900" },
-  statLabel: { color: "#a7c080", marginTop: 5 },
+  statNumber: { fontWeight: "900", marginTop: 5 },
+  statLabel: { color: "#a7c080", marginTop: 2 },
   sectionTitle: { color: "#fff", marginBottom: 15, fontWeight: "bold" },
   actionsGrade: { gap: 12 },
   touchable: { borderRadius: 12 },
@@ -364,6 +452,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 15,
+    position: "relative",
+  },
+  badgeStyle: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: "#ff7675",
   },
   textContainer: { flex: 1 },
   cardTitle: { color: "#fff", fontWeight: "bold" },
@@ -383,12 +478,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     elevation: 3,
   },
-  externalIcon: {
-    width: 35,
-    height: 35,
-    resizeMode: "contain",
-    // tintColor: "#d3e397" <-- Descomente se quiser forçar uma cor nos ícones
-  },
+  externalIcon: { width: 35, height: 35, resizeMode: "contain" },
   footerBar: {
     marginTop: 30,
     flexDirection: "row",
@@ -399,8 +489,8 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 16,
   },
-  logoA: { width: 60, height: 60, resizeMode: "contain" },
-  logoB: { width: 120, height: 60, resizeMode: "contain" },
+  logoA: { width: 100, height: 100, resizeMode: "contain" },
+  logoB: { width: 100, height: 100, resizeMode: "contain" },
 });
 
 export default Home;

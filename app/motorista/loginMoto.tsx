@@ -18,13 +18,13 @@ import { Button, Card, Text, TextInput } from "react-native-paper";
 
 export default function LoginMoto() {
   const router = useRouter();
-  const [isReady, setIsReady] = useState(false); // Novo: controle de carregamento inicial
+  const [isReady, setIsReady] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false); // Novo: loading específico para recuperação
 
-  // Pré-carregamento da logo
   useEffect(() => {
     async function prepare() {
       try {
@@ -37,6 +37,45 @@ export default function LoginMoto() {
     }
     prepare();
   }, []);
+
+  // Lógica de Esqueci minha senha (igual ao passageiro)
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setMessage("Digite seu e-mail para recuperar a senha! 📧");
+      return;
+    }
+
+    setForgotLoading(true);
+    setMessage("Enviando e-mail de recuperação... ⏳");
+
+    try {
+      const urlReset =
+        "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api/auth/reset-password";
+      await axios.post(
+        urlReset,
+        { email: email.trim() },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true",
+          },
+          timeout: 15000,
+        },
+      );
+
+      Alert.alert(
+        "Sucesso! ✅",
+        "Enviamos um link de recuperação para o seu e-mail. Verifique sua caixa de entrada e spam.",
+      );
+      setMessage("Link enviado com sucesso! 🚀");
+    } catch (error: any) {
+      const apiMessage =
+        error.response?.data?.message || "Não foi possível enviar o e-mail.";
+      setMessage(`❌ ${apiMessage}`);
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -63,31 +102,23 @@ export default function LoginMoto() {
       );
 
       const { access_token, user } = response.data;
-      console.log("DADOS DO USUARIO RECEBIDOS:", user);
-
-      // Pegamos o valor e garantimos que ele exista antes de comparar
       const userRole = user?.tipo_servico || user?.role;
 
-      // Usamos .toUpperCase() para comparar sem erro de letras grandes ou pequenas
       if (userRole && userRole.toUpperCase() === "PASSAGEIRO") {
         setLoading(false);
         setMessage("");
-
         Alert.alert(
           "Acesso Restrito ✋",
-          "Identificamos que sua conta é de Passageiro. Por favor, utilize o portal correto.",
+          "Esta conta é de Passageiro. Por favor, utilize o portal correto.",
           [
             {
               text: "Ir para Login Passageiro",
               onPress: () => router.replace("/cliente/loginClient"),
             },
-            {
-              text: "Ok",
-              style: "cancel",
-            },
+            { text: "Ok", style: "cancel" },
           ],
         );
-        return; // Bloqueia o acesso
+        return;
       }
 
       if (access_token) {
@@ -102,18 +133,13 @@ export default function LoginMoto() {
       }
     } catch (error: any) {
       setLoading(false);
-      if (error.response) {
-        const apiMessage = error.response.data.message;
-        setMessage(
-          `❌ ${Array.isArray(apiMessage) ? apiMessage[0] : apiMessage || "Credenciais inválidas"}`,
-        );
-      } else {
-        setMessage("❌ Sem resposta do servidor.");
-      }
+      const apiMessage = error.response?.data?.message;
+      setMessage(
+        `❌ ${Array.isArray(apiMessage) ? apiMessage[0] : apiMessage || "Credenciais inválidas"}`,
+      );
     }
   };
 
-  // Enquanto carrega a imagem, mostra loading centralizado
   if (!isReady) {
     return (
       <View style={styles.loadingContainer}>
@@ -162,7 +188,12 @@ export default function LoginMoto() {
                 textColor="#fff"
                 autoCapitalize="none"
                 left={<TextInput.Icon icon="email" color="#a7c080" />}
-                theme={{ colors: { surfaceVariant: "#3e4a39" } }}
+                theme={{
+                  colors: {
+                    surfaceVariant: "#3e4a39",
+                    onSurfaceVariant: "#ffffff96",
+                  },
+                }}
               />
 
               <TextInput
@@ -173,17 +204,36 @@ export default function LoginMoto() {
                 mode="outlined"
                 activeOutlineColor="#a7c080"
                 outlineColor="#4f5b4a"
-                style={styles.input}
+                style={styles.inputPassword}
                 textColor="#fff"
                 left={<TextInput.Icon icon="lock" color="#a7c080" />}
-                theme={{ colors: { surfaceVariant: "#3e4a39" } }}
+                theme={{
+                  colors: {
+                    surfaceVariant: "#3e4a39",
+                    onSurfaceVariant: "#ffffff96",
+                  },
+                }}
               />
+
+              {/* Botão Esqueci Minha Senha */}
+              <Button
+                mode="text"
+                onPress={handleForgotPassword}
+                loading={forgotLoading}
+                disabled={loading || forgotLoading}
+                textColor="#a7c080"
+                compact
+                style={styles.forgotButton}
+                labelStyle={styles.forgotLabel}
+              >
+                Esqueci minha senha
+              </Button>
 
               <Button
                 mode="contained"
                 onPress={handleLogin}
                 loading={loading}
-                disabled={loading}
+                disabled={loading || forgotLoading}
                 style={styles.buttonLogin}
                 labelStyle={styles.buttonLabel}
               >
@@ -195,7 +245,7 @@ export default function LoginMoto() {
                 onPress={() => router.push("/motorista/cadastro" as any)}
                 style={styles.buttonRegister}
                 textColor="#a7c080"
-                disabled={loading}
+                disabled={loading || forgotLoading}
               >
                 Não tenho conta
               </Button>
@@ -206,7 +256,7 @@ export default function LoginMoto() {
                 style={styles.buttonBack}
                 textColor="#a7c080"
                 icon="arrow-left"
-                disabled={loading}
+                disabled={loading || forgotLoading}
               >
                 Voltar ao Início
               </Button>
@@ -262,6 +312,9 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   input: { marginBottom: 15, backgroundColor: "#2d3629" },
+  inputPassword: { marginBottom: 5, backgroundColor: "#2d3629" },
+  forgotButton: { alignSelf: "flex-end", marginBottom: 15 },
+  forgotLabel: { fontSize: 13, textDecorationLine: "underline" },
   buttonLogin: {
     marginTop: 10,
     paddingVertical: 6,
@@ -276,9 +329,5 @@ const styles = StyleSheet.create({
   },
   buttonBack: { marginTop: 15, alignSelf: "center" },
   buttonLabel: { fontWeight: "bold", fontSize: 16, color: "#2d3629" },
-  message: {
-    marginTop: 25,
-    textAlign: "center",
-    fontWeight: "600",
-  },
+  message: { marginTop: 25, textAlign: "center", fontWeight: "600" },
 });

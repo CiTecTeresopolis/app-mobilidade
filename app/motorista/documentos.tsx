@@ -5,6 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -19,45 +20,39 @@ type DriverStatus = "pendente" | "analise" | "aprovado";
 export default function DocumentosScreen() {
   const router = useRouter();
 
-  // Estados para as imagens
   const [cnh, setCnh] = useState<string | null>(null);
   const [alvara, setAlvara] = useState<string | null>(null);
   const [selfie, setSelfie] = useState<string | null>(null);
-  const [docCurso, setDocCurso] = useState<string | null>(null); // Para motofrete
+  const [docCurso, setDocCurso] = useState<string | null>(null);
+  const [crlv, setCrlv] = useState<string | null>(null);
+  const [cmc, setCmc] = useState<string | null>(null);
 
-  // Estados de controle
   const [loading, setLoading] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [statusMotorista, setStatusMotorista] =
     useState<DriverStatus>("pendente");
   const [tipoVeiculo, setTipoVeiculo] = useState<string>("");
 
-  // Busca status e tipo do veículo
   const checkUserStatus = async () => {
     try {
       setCheckingStatus(true);
       const token = await AsyncStorage.getItem("token");
-
       const response = await axios.get(
         "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api/drivers/me",
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            "ngrok-skip-browser-warning": "69420",
+            "ngrok-skip-browser-warning": "true",
           },
         },
       );
 
       const driver = response.data;
-      setTipoVeiculo(driver.tipo_veiculo || "Uber"); // Fallback para Uber
+      setTipoVeiculo(driver.tipo_servico || "Uber");
 
-      if (driver.ativo === true) {
-        setStatusMotorista("aprovado");
-      } else if (driver.ativo === false) {
-        setStatusMotorista("analise");
-      } else {
-        setStatusMotorista("pendente");
-      }
+      if (driver.ativo === true) setStatusMotorista("aprovado");
+      else if (driver.ativo === false) setStatusMotorista("analise");
+      else setStatusMotorista("pendente");
     } catch (error: any) {
       console.log("Erro ao buscar status:", error.message);
       setStatusMotorista("pendente");
@@ -72,26 +67,33 @@ export default function DocumentosScreen() {
     }, []),
   );
 
-  const pickImage = async (type: "cnh" | "alvara" | "selfie" | "curso") => {
+  const canSubmit = () => {
+    if (!cnh) return false;
+    if (tipoVeiculo === "Moto") {
+      return !!(crlv && docCurso && cmc && selfie);
+    }
+    return !!(alvara && selfie);
+  };
+
+  const pickImage = async (
+    type: "cnh" | "alvara" | "selfie" | "curso" | "crlv" | "cmc",
+  ) => {
     if (statusMotorista !== "pendente") return;
 
-    let result;
-    if (type === "selfie") {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== "granted") return alert("Permissão de câmera negada!");
-
-      result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [3, 4],
-        quality: 0.5,
-      });
-    } else {
-      result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: true,
-        quality: 0.5,
-      });
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permissão Necessária",
+        "Acesse as configurações para permitir a câmera.",
+      );
+      return;
     }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false, // Desativado para evitar que o editor do Expo aumente o peso do arquivo
+      quality: 0.1, // Qualidade mínima para garantir que o servidor aceite sem mexer no main.ts
+    });
 
     if (!result.canceled) {
       const uri = result.assets[0].uri;
@@ -99,26 +101,35 @@ export default function DocumentosScreen() {
       if (type === "alvara") setAlvara(uri);
       if (type === "selfie") setSelfie(uri);
       if (type === "curso") setDocCurso(uri);
+      if (type === "crlv") setCrlv(uri);
+      if (type === "cmc") setCmc(uri);
     }
   };
 
   const handleUpload = async () => {
-    if (!cnh || !alvara || !selfie)
-      return alert("Por favor, tire todas as fotos antes de enviar.");
+    if (!canSubmit()) {
+      return Alert.alert(
+        "Atenção",
+        "Capture todos os documentos obrigatórios.",
+      );
+    }
 
     setLoading(true);
     const formData = new FormData();
 
     const appendFile = (uri: string, name: string) => {
-      const filename = uri.split("/").pop();
-      const match = /\.(\w+)$/.exec(filename || "");
+      const filename = uri.split("/").pop() || `${name}.jpg`;
+      const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : `image/jpeg`;
       formData.append(name, { uri, name: filename, type } as any);
     };
 
-    appendFile(cnh, "cnh");
-    appendFile(alvara, "alvara");
-    appendFile(selfie, "selfie");
+    if (cnh) appendFile(cnh, "cnh");
+    if (selfie) appendFile(selfie, "selfie");
+    if (alvara) appendFile(alvara, "alvara");
+    if (crlv) appendFile(crlv, "crlv");
+    if (docCurso) appendFile(docCurso, "curso");
+    if (cmc) appendFile(cmc, "cmc");
 
     try {
       const token = await AsyncStorage.getItem("token");
@@ -133,60 +144,59 @@ export default function DocumentosScreen() {
         },
       );
 
-      alert("Documentos enviados para análise! ✅");
+      Alert.alert("Sucesso", "Documentos enviados para análise! ✅");
       await checkUserStatus();
-    } catch (error) {
-      alert("Erro ao enviar documentos. Tente novamente.");
+    } catch (error: any) {
+      console.log("Erro no upload:", error.response?.data || error.message);
+      Alert.alert(
+        "Erro",
+        "Falha ao enviar. Tente tirar as fotos novamente com menos luz.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  // Lógica de Documentos Dinâmicos por Tipo
   const renderDocumentCards = () => {
     const docs: {
       label: string;
       state: string | null;
-      type: "cnh" | "alvara" | "selfie" | "curso";
-    }[] = [{ label: "Foto da CNH", state: cnh, type: "cnh" }];
+      type: "cnh" | "alvara" | "selfie" | "curso" | "crlv" | "cmc";
+    }[] = [{ label: "CNH do Motorista", state: cnh, type: "cnh" as const }];
 
-    // Diferenciação do documento central
     if (tipoVeiculo === "Moto") {
-      docs.push({
-        label: "CRLV da Moto",
-        state: alvara,
-        type: "alvara" as const,
-      });
-      docs.push({
-        label: "Certificado de Curso de Motofrete",
-        state: docCurso,
-        type: "curso" as const,
-      });
-    } else if (tipoVeiculo === "Van") {
-      docs.push({
-        label: "Autorização de Transporte (Van)",
-        state: alvara,
-        type: "alvara" as const,
-      });
-    } else if (tipoVeiculo === "Táxi") {
-      docs.push({
-        label: "Condutax / Registro",
-        state: alvara,
-        type: "alvara" as const,
-      });
+      docs.push(
+        { label: "CRLV da Motocicleta", state: crlv, type: "crlv" as const },
+        {
+          label: "Certificado de Motofrete",
+          state: docCurso,
+          type: "curso" as const,
+        },
+        {
+          label: "Inscrição Municipal (CMC)",
+          state: cmc,
+          type: "cmc" as const,
+        },
+        {
+          label: "Selfie com Documento",
+          state: selfie,
+          type: "selfie" as const,
+        },
+      );
     } else {
-      docs.push({
-        label: "Alvará de Circulação",
-        state: alvara,
-        type: "alvara" as const,
-      });
+      docs.push(
+        {
+          label: "Alvará / Registro Municipal",
+          state: alvara,
+          type: "alvara" as const,
+        },
+        {
+          label: "Selfie segurando CNH",
+          state: selfie,
+          type: "selfie" as const,
+        },
+      );
     }
-
-    docs.push({
-      label: "Selfie com Documento",
-      state: selfie,
-      type: "selfie" as const,
-    });
 
     return docs.map((item, index) => (
       <Card
@@ -207,7 +217,6 @@ export default function DocumentosScreen() {
               />
             )}
           </View>
-
           {item.state ? (
             <Image source={{ uri: item.state }} style={styles.preview} />
           ) : (
@@ -243,73 +252,69 @@ export default function DocumentosScreen() {
           <MaterialCommunityIcons name="arrow-left" size={28} color="#a7c080" />
         </TouchableOpacity>
 
-        {statusMotorista === "aprovado" && (
-          <View style={styles.statusView}>
-            <Card style={[styles.statusCard, styles.borderSuccess]}>
-              <Card.Content style={styles.centerItems}>
-                <Text variant="headlineSmall" style={styles.successTitle}>
-                  Perfil Ativo ✅
-                </Text>
-                <Text style={styles.statusSubtext}>
-                  Tudo certo! Você já pode realizar corridas.
-                </Text>
-                <Button
-                  mode="contained"
-                  onPress={() => router.push("/motorista/home")}
-                  style={styles.actionBtn}
-                >
-                  Ir para o Dashboard
-                </Button>
-              </Card.Content>
-            </Card>
-          </View>
-        )}
-
-        {statusMotorista === "analise" && (
-          <View style={styles.statusView}>
-            <Card style={styles.statusCard}>
-              <Card.Content style={styles.centerItems}>
-                <ActivityIndicator
-                  animating
-                  color="#a7c080"
-                  style={{ marginBottom: 20 }}
-                />
-                <Text variant="headlineSmall" style={styles.warningTitle}>
-                  Em Análise ⏳
-                </Text>
-                <Text style={styles.statusSubtext}>
-                  Estamos revisando seus documentos. Aguarde a liberação.
-                </Text>
-              </Card.Content>
-            </Card>
-          </View>
-        )}
-
-        {statusMotorista === "pendente" && (
+        {statusMotorista === "pendente" ? (
           <>
             <View style={styles.titleSection}>
               <Text variant="headlineMedium" style={styles.title}>
                 Verificação
               </Text>
-              <Text style={styles.subtitle}>Tipo: {tipoVeiculo}</Text>
+              <Text style={styles.subtitle}>Categoria: {tipoVeiculo}</Text>
             </View>
-
             {renderDocumentCards()}
-
             <Button
               mode="contained"
               onPress={handleUpload}
               loading={loading}
-              disabled={loading || !cnh || !alvara || !selfie}
-              style={[
-                styles.uploadBtn,
-                (!cnh || !alvara || !selfie) && { opacity: 0.5 },
-              ]}
+              disabled={loading || !canSubmit()}
+              style={[styles.uploadBtn, !canSubmit() && { opacity: 0.5 }]}
               labelStyle={styles.uploadLabel}
             >
               {loading ? "Enviando..." : "Enviar para Análise"}
             </Button>
           </>
+        ) : (
+          <View style={styles.statusView}>
+            <Card
+              style={[
+                styles.statusCard,
+                statusMotorista === "aprovado" && styles.borderSuccess,
+              ]}
+            >
+              <Card.Content style={styles.centerItems}>
+                {statusMotorista === "analise" ? (
+                  <>
+                    <ActivityIndicator
+                      animating
+                      color="#a7c080"
+                      style={{ marginBottom: 20 }}
+                    />
+                    <Text variant="headlineSmall" style={styles.warningTitle}>
+                      Em Análise ⏳
+                    </Text>
+                    <Text style={styles.statusSubtext}>
+                      Estamos revisando seus documentos.
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text variant="headlineSmall" style={styles.successTitle}>
+                      Perfil Ativo ✅
+                    </Text>
+                    <Text style={styles.statusSubtext}>
+                      Seu cadastro foi aprovado!
+                    </Text>
+                    <Button
+                      mode="contained"
+                      onPress={() => router.push("/motorista/home")}
+                      style={styles.actionBtn}
+                    >
+                      Ir para Home
+                    </Button>
+                  </>
+                )}
+              </Card.Content>
+            </Card>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -331,11 +336,9 @@ const styles = StyleSheet.create({
     width: 50,
     marginBottom: 10,
   },
-
   titleSection: { marginBottom: 25, alignItems: "center" },
   title: { color: "#fff", fontWeight: "bold" },
   subtitle: { color: "#a7c080", fontSize: 16, marginTop: 5, fontWeight: "500" },
-
   statusView: { marginTop: 40 },
   statusCard: { backgroundColor: "#3e4a39", padding: 20, borderRadius: 15 },
   borderSuccess: { borderColor: "#a7c080", borderWidth: 1 },
@@ -344,7 +347,6 @@ const styles = StyleSheet.create({
   warningTitle: { color: "#fff", fontWeight: "bold", marginBottom: 10 },
   statusSubtext: { color: "#fff", textAlign: "center", opacity: 0.8 },
   actionBtn: { marginTop: 20, backgroundColor: "#a7c080" },
-
   formCard: { marginBottom: 20, backgroundColor: "#3e4a39", borderRadius: 12 },
   cardHeader: {
     flexDirection: "row",

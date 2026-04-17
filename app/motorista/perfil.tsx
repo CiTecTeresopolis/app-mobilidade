@@ -55,7 +55,7 @@ export default function PerfilScreen() {
       setUserData({
         nome: driver.name || "Motorista",
         id: driver.id,
-        veiculo: driver.modelo_carro || "Veículo não cadastrado",
+        veiculo: driver.modelo || "Veículo não cadastrado",
         placa: driver.placa || "---",
       });
 

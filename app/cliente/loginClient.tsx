@@ -37,6 +37,43 @@ export default function LoginPassageiro() {
     prepare();
   }, []);
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert(
+        "Atenção",
+        "Por favor, digite seu e-mail no campo acima para recuperar a senha.",
+      );
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Ajuste para sua rota real do NestJS
+      const urlReset =
+        "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api/auth/reset-password";
+
+      await axios.post(
+        urlReset,
+        { email },
+        {
+          headers: { "ngrok-skip-browser-warning": "true" },
+        },
+      );
+
+      Alert.alert(
+        "E-mail Enviado! 📧",
+        "Verifique sua caixa de entrada para redefinir sua senha.",
+      );
+    } catch (error: any) {
+      Alert.alert(
+        "Erro",
+        error.response?.data?.message || "Não foi possível enviar o e-mail.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogin = async () => {
     if (!email || !password) {
       setMessage("Preencha e-mail e senha ❌");
@@ -149,7 +186,12 @@ export default function LoginPassageiro() {
                 textColor="#fff"
                 autoCapitalize="none"
                 keyboardType="email-address"
-                theme={{ colors: { surfaceVariant: "#3e4a39" } }}
+                theme={{
+                  colors: {
+                    surfaceVariant: "#3e4a39",
+                    onSurfaceVariant: "#ffffff96",
+                  },
+                }}
               />
 
               <TextInput
@@ -162,8 +204,23 @@ export default function LoginPassageiro() {
                 outlineColor="#4f5b4a"
                 style={styles.input}
                 textColor="#fff"
-                theme={{ colors: { surfaceVariant: "#3e4a39" } }}
+                theme={{
+                  colors: {
+                    surfaceVariant: "#3e4a39",
+                    onSurfaceVariant: "#ffffff96",
+                  },
+                }}
               />
+
+              <Button
+                mode="text"
+                onPress={handleForgotPassword}
+                style={styles.forgotPasswordBtn}
+                textColor="#a7c080"
+                compact
+              >
+                Esqueci minha senha
+              </Button>
 
               <Button
                 mode="contained"
@@ -227,6 +284,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 20,
     paddingBottom: Platform.OS === "ios" ? 40 : 20,
+  },
+
+  forgotPasswordBtn: {
+    alignSelf: "flex-end",
+    marginBottom: 10,
+    marginTop: -5, // Para ficar colado no input de senha
   },
   card: {
     paddingVertical: 10,

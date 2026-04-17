@@ -7,6 +7,7 @@ import React, { useEffect, useState } from "react";
 import {
   Alert,
   Image,
+  Linking,
   Modal,
   StyleSheet,
   TouchableOpacity,
@@ -69,6 +70,10 @@ export default function HomePassageiro() {
     setTimeout(() => setScanned(false), 2000);
   };
 
+  function openStoreOrApp(arg0: string, arg1: string, arg2: string) {
+    throw new Error("Function not implemented.");
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
@@ -87,8 +92,8 @@ export default function HomePassageiro() {
               Olá, {userName}!
             </Text>
             <Text variant="bodyMedium" style={styles.welcomeSubtitle}>
-              Bem-vindo ao TereMobilidade. Sua segurança é nossa prioridade.
-              Para iniciar, escaneie o código QR no veículo.
+              Bem-vindo ao TeresópolisMobilidade. Sua segurança é nossa
+              prioridade. Para iniciar, escaneie o código QR no veículo.
             </Text>
           </Card.Content>
         </Card>
@@ -103,6 +108,47 @@ export default function HomePassageiro() {
             Motoristas verificados pela Prefeitura
           </Text>
         </View>
+
+        <Text
+          variant="titleLarge"
+          style={[styles.sectionTitle, { marginTop: 25 }]}
+        >
+          Serviços Adicionais
+        </Text>
+
+        <View style={styles.iconButtonsRow}>
+          {[
+            {
+              img: require("../../assets/images/whatsapp.png"),
+              onPress: () => {
+                const url = "https://wa.me/5521972088235";
+                Linking.openURL(url).catch((err) =>
+                  console.error("Erro ao abrir o WhatsApp", err),
+                );
+              },
+            },
+            {
+              img: require("../../assets/images/digipare.png"),
+              onPress: () =>
+                openStoreOrApp("digipare", "com.digipare.app", "910964529"),
+            },
+            {
+              img: require("../../assets/images/vai_de_on.png"),
+              onPress: () =>
+                openStoreOrApp("vai_de_on", "com.VaiDeOn.app", "6464055396"),
+            },
+          ].map((item, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.iconButtonContainer}
+              onPress={item.onPress}
+            >
+              <View style={styles.iconCircle}>
+                <Image source={item.img} style={styles.externalIcon} />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {/* FOOTER COM BOTÃO QR CODE */}
@@ -111,8 +157,8 @@ export default function HomePassageiro() {
           style={styles.footerItem}
           onPress={() => router.replace("/")}
         >
-          <MaterialCommunityIcons name="calendar" size={28} color="#a7c080" />
-          <Text style={styles.footerLabel}>Agenda</Text>
+          <MaterialCommunityIcons name="logout" size={28} color="#a7c080" />
+          <Text style={styles.footerLabel}>Sair</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.qrButton} onPress={handleOpenScanner}>
@@ -127,13 +173,14 @@ export default function HomePassageiro() {
 
         <TouchableOpacity
           style={styles.footerItem}
-          onPress={() => router.push("/contato")}
+          onPress={() => {
+            const url = "https://wa.me/5521972088235";
+            Linking.openURL(url).catch((err) =>
+              Alert.alert("Erro", "Não foi possível abrir o WhatsApp"),
+            );
+          }}
         >
-          <MaterialCommunityIcons
-            name="help-circle"
-            size={28}
-            color="#8a9685"
-          />
+          <MaterialCommunityIcons name="whatsapp" size={28} color="#a7c080" />
           <Text style={styles.footerLabel}>Contato</Text>
         </TouchableOpacity>
       </View>
@@ -248,5 +295,22 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "transparent",
   },
+  sectionTitle: { color: "#fff", marginBottom: 15, fontWeight: "bold" },
+  iconButtonsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  iconButtonContainer: { alignItems: "center", width: "22%" },
+  iconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#3e4a39",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 3,
+  },
+  externalIcon: { width: 35, height: 35, resizeMode: "contain" },
   scanText: { color: "#fff", marginTop: 20, fontWeight: "bold", fontSize: 16 },
 });

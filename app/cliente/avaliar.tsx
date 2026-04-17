@@ -113,14 +113,46 @@ export default function AvaliarScreen() {
         </Text>
         <Button
           mode="contained"
-          onPress={() => router.replace("/")}
-          style={styles.btn}
+          onPress={() => router.replace("/cliente/home")}
+          style={styles.btnVoltar}
+          textColor="#ffff"
         >
           Início
         </Button>
       </View>
     );
   }
+
+  const handleDenunciar = () => {
+    Alert.alert(
+      "Denunciar Motorista ⚠️",
+      "Deseja abrir um canal direto com a central de segurança para relatar um incidente grave?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Sim, Denunciar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Exemplo de chamada para sua API de denúncias
+              await axios.post(`${API_BASE}/auth/reports`, {
+                driverId,
+                type: "GRAVE",
+                description:
+                  feedback || "Denúncia realizada pelo portal do passageiro",
+              });
+              Alert.alert(
+                "Sucesso",
+                "Sua denúncia foi enviada. Nossa equipe analisará o caso imediatamente.",
+              );
+            } catch (e) {
+              Alert.alert("Erro", "Não foi possível enviar a denúncia agora.");
+            }
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -172,6 +204,16 @@ export default function AvaliarScreen() {
               >
                 Confirmar Avaliação
               </Button>
+
+              <Button
+                mode="text"
+                onPress={handleDenunciar}
+                style={styles.btnReport}
+                textColor="#e74c3c"
+                icon="alert-octagon"
+              >
+                Denunciar Motorista
+              </Button>
             </Card.Content>
           </Card>
         </ScrollView>
@@ -205,5 +247,15 @@ const styles = StyleSheet.create({
     marginTop: 25,
     backgroundColor: "#2d3629",
     borderRadius: 10,
+  },
+
+  btnReport: {
+    marginTop: 10,
+    borderRadius: 10,
+  },
+
+  btnVoltar: {
+    marginTop: 25,
+    backgroundColor: "#37443e",
   },
 });

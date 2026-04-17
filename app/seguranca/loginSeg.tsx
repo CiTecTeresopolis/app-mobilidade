@@ -1,4 +1,4 @@
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { Stack, useRouter } from "expo-router";
@@ -12,6 +12,9 @@ import {
   View,
 } from "react-native";
 import { Button, Card, Text, TextInput } from "react-native-paper";
+
+const API_URL =
+  "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api/auth/login-seguranca";
 
 export default function LoginSeguranca() {
   const router = useRouter();
@@ -30,13 +33,12 @@ export default function LoginSeguranca() {
     setMessage("Autenticando credenciais... 🛡️");
 
     try {
-      await AsyncStorage.clear();
-
-      const urlLogin =
-        "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api/auth/login-seguranca";
+      // No iOS, remover itens específicos é mais seguro que .clear()
+      await AsyncStorage.removeItem("token_seguranca");
+      await AsyncStorage.removeItem("user_seguranca");
 
       const response = await axios.post(
-        urlLogin,
+        API_URL,
         {
           matricula: mat.trim(),
           password: password.trim(),
@@ -45,8 +47,6 @@ export default function LoginSeguranca() {
           headers: {
             "Content-Type": "application/json",
             "ngrok-skip-browser-warning": "true",
-            Authorization: "",
-            "Cache-Control": "no-cache",
           },
           timeout: 10000,
         },
@@ -56,27 +56,36 @@ export default function LoginSeguranca() {
 
       if (access_token) {
         await AsyncStorage.setItem("token_seguranca", access_token);
-        if (user)
+        if (user) {
           await AsyncStorage.setItem("user_seguranca", JSON.stringify(user));
-
+        }
         router.replace("/seguranca/home");
       }
     } catch (error: any) {
-      console.log("Erro capturado:", error.response?.data);
-      setMessage(
-        `❌ ${error.response?.data?.message || "Matrícula ou senha incorretos"}`,
-      );
+      if (error.response) {
+        // Erro retornado pelo NestJS (Ex: 401, 404)
+        console.log("Erro do Servidor:", error.response.data);
+        setMessage(
+          `❌ ${error.response.data.message || "Credenciais inválidas"}`,
+        );
+      } else if (error.request) {
+        // Erro de rede (Ngrok fora ou sem internet)
+        console.log("Erro de Rede:", error.request);
+        setMessage("❌ Sem resposta do servidor. Verifique o Ngrok.");
+      } else {
+        // Erro genérico
+        console.log("Erro de Configuração:", error.message);
+        setMessage("❌ Erro ao tentar conectar.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    // KeyboardAvoidingView garante que o teclado não cubra o conteúdo
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
     >
       <View style={styles.container}>
         <StatusBar style="light" />
@@ -85,13 +94,12 @@ export default function LoginSeguranca() {
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
         >
           <Card style={styles.card}>
             <View style={styles.iconContainer}>
               <MaterialCommunityIcons
                 name="shield-lock"
-                size={100}
+                size={80}
                 color="#a7c080"
               />
             </View>
@@ -110,9 +118,8 @@ export default function LoginSeguranca() {
                 outlineColor="#4f5b4a"
                 style={styles.input}
                 textColor="#fff"
-                autoCapitalize="none"
+                keyboardType="numeric"
                 left={<TextInput.Icon icon="account" color="#a7c080" />}
-                theme={{ colors: { surfaceVariant: "#3e4a39" } }}
               />
 
               <TextInput
@@ -126,7 +133,6 @@ export default function LoginSeguranca() {
                 style={styles.input}
                 textColor="#fff"
                 left={<TextInput.Icon icon="lock" color="#a7c080" />}
-                theme={{ colors: { surfaceVariant: "#3e4a39" } }}
               />
 
               <Button
@@ -143,11 +149,11 @@ export default function LoginSeguranca() {
               <Button
                 mode="text"
                 onPress={() => router.replace("/")}
-                style={{ marginTop: 20 }}
+                style={{ marginTop: 15 }}
                 textColor="#a7c080"
                 icon="chevron-left"
               >
-                Voltar ao Início
+                Voltar
               </Button>
 
               {message ? (
@@ -162,10 +168,6 @@ export default function LoginSeguranca() {
               ) : null}
             </Card.Content>
           </Card>
-
-          <Text style={styles.versionText}>
-            Acesso Restrito - TereMobilidade v1.0
-          </Text>
         </ScrollView>
       </View>
     </KeyboardAvoidingView>
@@ -178,21 +180,19 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     padding: 20,
-    // Espaço extra no fundo para garantir visibilidade total no scroll com teclado
-    paddingBottom: Platform.OS === "ios" ? 40 : 20,
   },
   card: {
     paddingVertical: 20,
     borderRadius: 25,
     backgroundColor: "#3e4a39",
-    elevation: 10,
+    elevation: 8,
   },
   iconContainer: {
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 5,
   },
   title: {
-    marginBottom: 25,
+    marginBottom: 20,
     textAlign: "center",
     color: "#fff",
     fontWeight: "bold",
@@ -204,14 +204,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#a7c080",
     borderRadius: 12,
   },
-  buttonLabel: { fontWeight: "bold", fontSize: 16, color: "#2d3629" },
+  buttonLabel: { fontWeight: "bold", color: "#2d3629" },
   message: { marginTop: 20, textAlign: "center", fontWeight: "600" },
-  versionText: {
-    marginTop: 30,
-    textAlign: "center",
-    color: "rgba(255,255,255,0.2)",
-    fontSize: 10,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
 });

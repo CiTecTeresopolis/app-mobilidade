@@ -29,8 +29,17 @@ export default function CadastroPassageiro() {
   const closeMenu = () => setVisible(false);
 
   const handleSubmit = async () => {
+    // 1. Validação de Campos Vazios
     if (!name || !email || !password || !servico) {
       setMessage("Preencha todos os campos! ❌");
+      return;
+    }
+
+    // 2. Validação de Nome Completo (Verifica se há pelo menos um espaço entre palavras)
+    const nameTrimmed = name.trim();
+    const nameParts = nameTrimmed.split(" ");
+    if (nameParts.length < 2 || nameParts[1].length < 1) {
+      setMessage("Por favor, digite seu nome completo. ❌");
       return;
     }
 
@@ -38,16 +47,16 @@ export default function CadastroPassageiro() {
     setMessage("");
 
     try {
-      await axios.post(
+      const response = await axios.post(
         "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api/auth/register-passenger",
         {
           email: email.trim(),
           password,
-          name: name.trim(),
+          name: nameTrimmed,
           servico: servico.toLowerCase(),
         },
         {
-          timeout: 8000,
+          timeout: 10000,
           headers: {
             "Content-Type": "application/json",
             "ngrok-skip-browser-warning": "true",
@@ -55,8 +64,16 @@ export default function CadastroPassageiro() {
         },
       );
 
-      setMessage("Cadastro realizado com sucesso! 🚀");
-      setTimeout(() => router.replace("/cliente/loginClient"), 2000);
+      // 3. Mensagem orientando sobre o E-mail de Verificação
+      setMessage("Sucesso! Verifique seu e-mail para ativar a conta. 📧🚀");
+
+      // Opcional: Limpar campos após sucesso
+      setName("");
+      setEmail("");
+      setPassword("");
+
+      // Navega para o login após um tempo maior para o usuário ler o aviso do e-mail
+      setTimeout(() => router.replace("/cliente/loginClient"), 4000);
     } catch (error: any) {
       const serverMessage =
         error.response?.data?.message || "Erro ao conectar com o servidor";
@@ -110,6 +127,12 @@ export default function CadastroPassageiro() {
               mode="flat"
               textColor="#fff"
               activeUnderlineColor="#a7c080"
+              theme={{
+                colors: {
+                  onSurfaceVariant: "#ffffff96",
+                  primary: "#a7c080",
+                },
+              }}
             />
 
             <TextInput
@@ -122,6 +145,12 @@ export default function CadastroPassageiro() {
               activeUnderlineColor="#a7c080"
               keyboardType="email-address"
               autoCapitalize="none"
+              theme={{
+                colors: {
+                  onSurfaceVariant: "#ffffff96",
+                  primary: "#a7c080",
+                },
+              }}
             />
 
             <View style={styles.dropdownContainer}>
@@ -141,6 +170,12 @@ export default function CadastroPassageiro() {
                       style={styles.input}
                       textColor="#fff"
                       activeUnderlineColor="#a7c080"
+                      theme={{
+                        colors: {
+                          onSurfaceVariant: "#ffffff96",
+                          primary: "#a7c080",
+                        },
+                      }}
                       right={
                         <TextInput.Icon icon="chevron-down" color="#a7c080" />
                       }
@@ -170,6 +205,12 @@ export default function CadastroPassageiro() {
               textColor="#fff"
               activeUnderlineColor="#a7c080"
               secureTextEntry
+              theme={{
+                colors: {
+                  onSurfaceVariant: "#ffffff96",
+                  primary: "#a7c080",
+                },
+              }}
             />
 
             {message ? (
