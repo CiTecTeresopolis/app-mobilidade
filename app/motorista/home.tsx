@@ -26,7 +26,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 // 1. Interfaces
 interface ActionCardProps {
-  icon: keyof typeof MaterialCommunityIcons.hasIcon | string;
+  icon: string;
   title: string;
   subtitle: string;
   onPress: () => void;
@@ -81,29 +81,31 @@ const Home = () => {
   const [currentCity, setCurrentCity] = useState("");
   const [loading, setLoading] = useState(true);
   const [statusAtivo, setStatusAtivo] = useState<boolean | null>(null);
+  const [statusReal, setStatusReal] = useState<string>("");
   const [menuVisible, setMenuVisible] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [driverId, setDriverId] = useState<string | null>(null);
+  const [isCleaning, setIsCleaning] = useState(false);
 
-  const API_URL =
-    "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api";
+  const API_URL = "https://pilgrimatic-nita-scenographically.ngrok-free.dev";
 
   const loadDashboardData = async () => {
+    if (isCleaning) return;
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem("token");
-
       if (!token) {
         router.replace("/");
         return;
       }
 
-      const profileRes = await fetch(`${API_URL}/drivers/me`, {
+      const profileRes = await fetch(`${API_URL}/api/drivers/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "ngrok-skip-browser-warning": "true",
         },
       });
+      console.log("STATUS HTTP:", profileRes.status);
 
       if (!profileRes.ok) throw new Error("Erro ao buscar perfil");
 
@@ -112,10 +114,11 @@ const Home = () => {
       setCurrentCity(profileData.address || "Teresópolis");
       setStatusAtivo(profileData.ativo);
       setDriverId(profileData.id);
+      setStatusReal(profileData.status);
+      await AsyncStorage.setItem("userId", profileData.id);
 
-      // Busca contagem de notificações não lidas
       const notifyRes = await fetch(
-        `${API_URL}/auth/notifications/unread-count/${profileData.id}`,
+        `${API_URL}/api/auth/notifications/unread-count/${profileData.id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -137,47 +140,54 @@ const Home = () => {
 
   useFocusEffect(
     useCallback(() => {
-      loadDashboardData();
-    }, []),
+      if (!isCleaning) loadDashboardData();
+      const interval = setInterval(() => {
+        if (!isCleaning) loadDashboardData();
+      }, 30000);
+      return () => clearInterval(interval);
+    }, [driverId, isCleaning]),
   );
 
   const handlePressNotifications = async () => {
-    // 1. ZERA O CONTADOR VISUALMENTE NA HORA
-    // Isso faz o badge sumir antes mesmo de falar com o servidor
+    // 1. Feedback instantâneo na UI
     setUnreadNotifications(0);
+
+    // 2. Inicia o processo de limpeza em background
+    setIsCleaning(true);
 
     try {
       const token = await AsyncStorage.getItem("token");
-
-      // 2. Tenta pegar o ID do motorista (seja do estado ou do storage)
       const idAtual = driverId || (await AsyncStorage.getItem("userId"));
 
-      if (idAtual && token) {
-        // 3. Chamada para o banco (usamos await aqui para garantir o processo)
-        const response = await fetch(
-          `${API_URL}/auth/notifications/read-all/${idAtual}`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-              "ngrok-skip-browser-warning": "true",
-            },
-          },
-        );
+      // Chamada ao backend
+      await fetch(`${API_URL}/api/auth/notifications/read-all/${idAtual}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "ngrok-skip-browser-warning": "true",
+        },
+      });
 
-        const resData = await response.json();
-        console.log("Resposta do servidor:", resData);
-      }
+      // 3. Navega para a tela de lista
+      router.push("/motorista/agenda");
+
+      // Pequeno delay para liberar o poll de atualização e não pegar o dado antigo
+      setTimeout(() => setIsCleaning(false), 2000);
     } catch (error) {
-      console.error("Erro ao limpar notificações:", error);
+      console.error("Erro ao limpar notificações", error);
+      setIsCleaning(false);
+      router.push("/motorista/agenda");
     }
-
-    // 4. Navega para a tela de agenda
-    router.push("/motorista/agenda");
   };
 
   const getStatusConfig = () => {
+    if (statusReal === "REJECTED") {
+      return {
+        text: "Recusado",
+        color: "#ff7675",
+        icon: "close-circle-outline",
+      };
+    }
     if (statusAtivo === true) {
       return { text: "Aprovado", color: "#a7c080", icon: "check-circle" };
     } else if (statusAtivo === false) {
@@ -199,20 +209,24 @@ const Home = () => {
     router.replace("/");
   };
 
+  // Função genérica para abrir apps externos ou redirecionar para loja
   const openStoreOrApp = async (
     scheme: string,
     bundleId: string,
     appId: string,
   ) => {
     const playStoreUrl = `https://play.google.com/store/apps/details?id=${bundleId}`;
-    const appStoreUrl = `https://apps.apple.com/br/app/id${appId}`;
+    const appStoreUrl = `https://apps.apple.com/app/id${appId}`;
     const storeUrl = Platform.OS === "ios" ? appStoreUrl : playStoreUrl;
     const appUrl = `${scheme}://`;
 
     try {
       const canOpen = await Linking.canOpenURL(appUrl);
-      if (canOpen) await Linking.openURL(appUrl);
-      else await Linking.openURL(storeUrl);
+      if (canOpen) {
+        await Linking.openURL(appUrl);
+      } else {
+        await Linking.openURL(storeUrl);
+      }
     } catch (err) {
       await Linking.openURL(storeUrl);
     }
@@ -247,7 +261,13 @@ const Home = () => {
           contentStyle={styles.menuContent}
         >
           <Menu.Item
-            leadingIcon="account-circle"
+            leadingIcon={(props) => (
+              <MaterialCommunityIcons
+                {...props}
+                name="account-circle"
+                color="#a7c080"
+              />
+            )}
             onPress={() => {
               setMenuVisible(false);
               router.push("/motorista/perfil");
@@ -257,8 +277,17 @@ const Home = () => {
           />
           <Divider style={styles.menuDivider} />
           <Menu.Item
-            leadingIcon="logout"
-            onPress={handleLogout}
+            leadingIcon={(props) => (
+              <MaterialCommunityIcons
+                {...props}
+                name="logout"
+                color="#a7c080"
+              />
+            )}
+            onPress={() => {
+              setMenuVisible(false);
+              router.replace("/motorista/loginMoto");
+            }}
             title="Sair"
             titleStyle={[styles.menuItemText, { color: "#ff7675" }]}
           />
@@ -294,6 +323,11 @@ const Home = () => {
                   <Text variant="bodySmall" style={styles.statLabel}>
                     Status da Conta
                   </Text>
+                  {statusReal === "REJECTED" && (
+                    <Text style={styles.rejectionNotice}>
+                      Verifique suas notificações para saber o motivo da recusa.
+                    </Text>
+                  )}
                 </View>
               )}
             </View>
@@ -303,7 +337,6 @@ const Home = () => {
         <Text variant="titleLarge" style={styles.sectionTitle}>
           Ações Rápidas
         </Text>
-
         <View style={styles.actionsGrade}>
           <ActionCard
             icon="car-multiple"
@@ -322,11 +355,7 @@ const Home = () => {
             }
             color="#d3e397"
             badgeCount={unreadNotifications}
-            onPress={() => {
-              console.log("Cliquei!");
-              setUnreadNotifications(0);
-              handlePressNotifications();
-            }}
+            onPress={handlePressNotifications}
           />
           <ActionCard
             icon="star-face"
@@ -340,11 +369,11 @@ const Home = () => {
             title="Legislação"
             subtitle="Regras e normas"
             color="#d3e397"
-            onPress={async () => {
-              const url =
-                "https://www.teresopolis.rj.gov.br/transparencia/legislacao/";
-              await Linking.openURL(url);
-            }}
+            onPress={() =>
+              Linking.openURL(
+                "https://www.teresopolis.rj.gov.br/transparencia/legislacao/",
+              )
+            }
           />
         </View>
 
@@ -359,22 +388,97 @@ const Home = () => {
           {[
             {
               img: require("../../assets/images/whatsapp.png"),
-              onPress: () => {
-                const url = "https://wa.me/5521972088235";
-                Linking.openURL(url).catch((err) =>
-                  console.error("Erro ao abrir o WhatsApp", err),
+              onPress: async () => {
+                const phoneNumber = "5521972088235";
+                const message = encodeURIComponent(
+                  "Olá! Preciso de suporte no Teresópolis Mobilidade.",
                 );
+
+                // Links para abrir a conversa direta
+                const waUrl = `whatsapp://send?phone=${phoneNumber}&text=${message}`;
+                const waWebUrl = `https://wa.me/${phoneNumber}?text=${message}`;
+
+                // Links da Loja (Fallback)
+                const storeUrl =
+                  Platform.OS === "android"
+                    ? `market://details?id=com.whatsapp`
+                    : `https://apps.apple.com/br/app/id310633997`;
+
+                try {
+                  // Tenta abrir o aplicativo do WhatsApp primeiro
+                  const supported = await Linking.canOpenURL(waUrl);
+
+                  if (supported) {
+                    await Linking.openURL(waUrl);
+                  } else {
+                    // Se não conseguir abrir o 'whatsapp://', tenta o link universal 'wa.me'
+                    // que abre no navegador ou redireciona para a loja
+                    const canOpenWeb = await Linking.canOpenURL(waWebUrl);
+                    if (canOpenWeb) {
+                      await Linking.openURL(waWebUrl);
+                    } else {
+                      // Se tudo falhar, manda para a loja baixar o app
+                      await Linking.openURL(storeUrl);
+                    }
+                  }
+                } catch (err) {
+                  // Em caso de erro crítico, abre a loja
+                  await Linking.openURL(storeUrl);
+                }
               },
             },
             {
               img: require("../../assets/images/digipare.png"),
-              onPress: () =>
-                openStoreOrApp("digipare", "com.digipare.app", "910964529"),
+              onPress: () => {
+                const bundleId = "com.digipare.app"; // ID do Digipare na Play Store
+                const appleId = "910964529"; // ID do Digipare na App Store
+
+                const url =
+                  Platform.OS === "android"
+                    ? `market://details?id=${bundleId}`
+                    : `https://apps.apple.com/br/app/id${appleId}`;
+
+                Linking.canOpenURL(url)
+                  .then((supported) => {
+                    if (supported) {
+                      Linking.openURL(url);
+                    } else {
+                      // Fallback: Abre o link do navegador se o app da loja não responder
+                      Linking.openURL(
+                        `https://play.google.com/store/apps/details?id=${bundleId}`,
+                      );
+                    }
+                  })
+                  .catch((err) =>
+                    console.error("Erro ao abrir o Digipare", err),
+                  );
+              },
             },
             {
               img: require("../../assets/images/vai_de_on.png"),
-              onPress: () =>
-                openStoreOrApp("vai_de_on", "com.VaiDeOn.app", "6464055396"),
+              onPress: () => {
+                const bundleId = "com.VaiDeOn.app"; // ID extraído do link da Play Store
+                const appleId = "6464055396"; // ID do Vai de Ônibus na App Store
+
+                // Se for Android, usa o protocolo 'market', se for iOS, usa o link da App Store
+                const url =
+                  Platform.OS === "android"
+                    ? `market://details?id=${bundleId}`
+                    : `https://apps.apple.com/br/app/id${appleId}`;
+
+                Linking.canOpenURL(url)
+                  .then((supported) => {
+                    if (supported) {
+                      Linking.openURL(url);
+                    } else {
+                      // Se falhar (ex: emulador), abre o link do navegador que você enviou
+                      Linking.openURL(
+                        `https://play.google.com/store/apps/details?id=${bundleId}`,
+                      );
+                    }
+                  })
+                  .catch((err) => console.error("Erro ao abrir a loja", err));
+              },
             },
           ].map((item, index) => (
             <TouchableOpacity
@@ -418,7 +522,7 @@ const styles = StyleSheet.create({
   welcomeText: { color: "#fff", fontWeight: "bold" },
   cityText: { color: "#8a9685" },
   menuContent: { backgroundColor: "#3e4a39", borderRadius: 8, marginTop: 40 },
-  menuItemText: { color: "#fff", fontSize: 16 },
+  menuItemText: { color: "#fff8f8", fontSize: 16 },
   menuDivider: { backgroundColor: "#2d3629" },
   statsCard: {
     marginVertical: 10,
@@ -436,6 +540,15 @@ const styles = StyleSheet.create({
   statItem: { alignItems: "center" },
   statNumber: { fontWeight: "900", marginTop: 5 },
   statLabel: { color: "#a7c080", marginTop: 2 },
+  rejectionNotice: {
+    color: "#fff",
+    fontSize: 12,
+    marginTop: 10,
+    textAlign: "center",
+    backgroundColor: "rgba(255,118,117,0.2)",
+    padding: 8,
+    borderRadius: 8,
+  },
   sectionTitle: { color: "#fff", marginBottom: 15, fontWeight: "bold" },
   actionsGrade: { gap: 12 },
   touchable: { borderRadius: 12 },
@@ -472,7 +585,7 @@ const styles = StyleSheet.create({
   iconCircle: {
     width: 60,
     height: 60,
-    borderRadius: 30,
+    borderRadius: 10,
     backgroundColor: "#3e4a39",
     justifyContent: "center",
     alignItems: "center",

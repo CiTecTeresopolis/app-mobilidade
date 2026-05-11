@@ -3,12 +3,12 @@ import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import {
-    Alert,
-    Linking,
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  Alert,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { Button, Card, Text, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -35,7 +35,7 @@ export default function ContatoScreen() {
 
   const openWhatsApp = () => {
     const url =
-      "whatsapp://send?phone=5524999999999&text=Olá, sou motorista do TereMobilidade e preciso de ajuda.";
+      "whatsapp://send?phone=5524999999999&text=Olá, sou motorista do TeresópolisMobilidade e preciso de ajuda.";
     Linking.openURL(url).catch(() =>
       Alert.alert("Erro", "WhatsApp não instalado."),
     );

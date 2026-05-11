@@ -24,6 +24,12 @@ export default function LoginPassageiro() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
+  const validateEmail = (email: string) => {
+    // Esta regex exige: texto + @ + texto + . + pelo menos 2 letras no final
+    const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return regex.test(email.trim());
+  };
+
   useEffect(() => {
     async function prepare() {
       try {
@@ -76,7 +82,18 @@ export default function LoginPassageiro() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      setMessage("Preencha e-mail e senha ❌");
+      Alert.alert(
+        "Campos Obrigatórios", // Este é o TÍTULO
+        "Por favor, preencha o e-mail e a senha para continuar.", // Esta é a MENSAGEM
+        [{ text: "Entendi" }], // Botão de fechar
+      );
+      return;
+    }
+    if (!validateEmail(email.trim())) {
+      Alert.alert(
+        "E-mail Inválido",
+        "Por favor, insira um e-mail válido.(ex: nome@email.com).",
+      );
       return;
     }
     setLoading(true);
@@ -123,15 +140,50 @@ export default function LoginPassageiro() {
         await AsyncStorage.setItem("token_passageiro", access_token);
         if (user?.name) await AsyncStorage.setItem("user_name", user.name);
 
-        setMessage("Bem-vindo! ✅");
+        Alert.alert(
+          "", // Este é o TÍTULO
+          "Bem vindo ao Teresópolis Mobilidade", // Esta é a MENSAGEM
+          [{ text: "ok" }], // Botão de fechar
+        );
         setTimeout(() => {
           router.replace("/cliente/home" as any);
         }, 500);
       }
     } catch (error: any) {
-      setMessage(`❌ ${error.response?.data?.message || "Erro no login"}`);
-    } finally {
       setLoading(false);
+      console.log(
+        "Erro detalhado:",
+        JSON.stringify(error.response?.data, null, 2),
+      );
+
+      const errorData = error.response?.data;
+      let finalMessage = "Email ou senha incorretos!";
+
+      if (errorData) {
+        // 1. Se a mensagem for aquele array de objetos do class-validator
+        if (
+          Array.isArray(errorData.message) &&
+          typeof errorData.message[0] === "object"
+        ) {
+          // Extrai a primeira regra de validação que falhou (ex: 'password must be longer than...')
+          const firstError = errorData.message[0];
+          if (firstError.constraints) {
+            finalMessage = Object.values(firstError.constraints)[0] as string;
+          }
+        }
+        // 2. Se for uma mensagem de string simples ou array de strings comum
+        else if (errorData.message) {
+          finalMessage = Array.isArray(errorData.message)
+            ? errorData.message[0]
+            : errorData.message;
+        }
+        // 3. Fallback para erros do Supabase/Auth
+        else if (errorData.error_description) {
+          finalMessage = errorData.error_description;
+        }
+      }
+
+      Alert.alert("Erro no Login", "Email ou senha incorretos!");
     }
   };
 

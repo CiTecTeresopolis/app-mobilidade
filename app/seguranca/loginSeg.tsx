@@ -5,6 +5,7 @@ import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -25,12 +26,12 @@ export default function LoginSeguranca() {
 
   const handleLogin = async () => {
     if (!mat || !password) {
-      setMessage("Preencha matrícula e senha ❌");
+      Alert.alert("Preencha matrícula e senha ");
       return;
     }
 
     setLoading(true);
-    setMessage("Autenticando credenciais... 🛡️");
+    setMessage("Autenticando credenciais...");
 
     try {
       // No iOS, remover itens específicos é mais seguro que .clear()
@@ -59,23 +60,24 @@ export default function LoginSeguranca() {
         if (user) {
           await AsyncStorage.setItem("user_seguranca", JSON.stringify(user));
         }
+        Alert.alert("Autenticado com sucesso!");
         router.replace("/seguranca/home");
       }
     } catch (error: any) {
       if (error.response) {
         // Erro retornado pelo NestJS (Ex: 401, 404)
         console.log("Erro do Servidor:", error.response.data);
-        setMessage(
-          `❌ ${error.response.data.message || "Credenciais inválidas"}`,
+        Alert.alert(
+          ` ${error.response.data.message || "Matricula ou senha inválidas"}`,
         );
       } else if (error.request) {
         // Erro de rede (Ngrok fora ou sem internet)
         console.log("Erro de Rede:", error.request);
-        setMessage("❌ Sem resposta do servidor. Verifique o Ngrok.");
+        setMessage(" Sem resposta do servidor. Verifique o Ngrok.");
       } else {
         // Erro genérico
         console.log("Erro de Configuração:", error.message);
-        setMessage("❌ Erro ao tentar conectar.");
+        setMessage("Erro ao tentar conectar.");
       }
     } finally {
       setLoading(false);

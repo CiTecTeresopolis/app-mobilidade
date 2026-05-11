@@ -37,18 +37,29 @@ export default function Agenda() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
+  // No topo do arquivo, certifique-se de importar o driverId se necessário
+  // ou buscar do AsyncStorage como você já faz.
+
   const fetchNotifications = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
+      // IMPORTANTE: Busque o ID do motorista para filtrar no backend
+      const driverId = await AsyncStorage.getItem("userId");
+
+      // Ajuste a rota para buscar apenas o que é relevante para este motorista
+      // Você pode criar uma rota GET /notifications/my-notifications/:driverId no NestJS
       const response = await axios.get(`${API_URL}/notifications/all`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "ngrok-skip-browser-warning": "true",
         },
+        // Se o seu backend permitir, envie o driverId como parâmetro
+        params: { driverId },
       });
+
       setNotifications(response.data);
     } catch (error) {
-      console.error(error);
+      console.error("Erro ao buscar notificações:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -56,7 +67,12 @@ export default function Agenda() {
   };
 
   useEffect(() => {
-    fetchNotifications();
+    const prepararTela = async () => {
+      const id = await AsyncStorage.getItem("userId");
+      console.log("Meu ID na tela de notificações:", id);
+      fetchNotifications();
+    };
+    prepararTela();
   }, []);
 
   const renderItem = ({ item }: { item: Notification }) => (

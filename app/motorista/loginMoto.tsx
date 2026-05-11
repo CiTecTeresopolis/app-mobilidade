@@ -24,6 +24,11 @@ export default function LoginMoto() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false); // Novo: loading específico para recuperação
+  const validateEmail = (email: string) => {
+    // Esta regex exige: texto + @ + texto + . + pelo menos 2 letras no final
+    const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return regex.test(email.trim());
+  };
 
   useEffect(() => {
     async function prepare() {
@@ -41,12 +46,12 @@ export default function LoginMoto() {
   // Lógica de Esqueci minha senha (igual ao passageiro)
   const handleForgotPassword = async () => {
     if (!email) {
-      setMessage("Digite seu e-mail para recuperar a senha! 📧");
+      Alert.alert("Digite seu e-mail para recuperar a senha!");
       return;
     }
 
     setForgotLoading(true);
-    setMessage("Enviando e-mail de recuperação... ⏳");
+    setMessage("Enviando e-mail de recuperação...");
 
     try {
       const urlReset =
@@ -71,7 +76,7 @@ export default function LoginMoto() {
     } catch (error: any) {
       const apiMessage =
         error.response?.data?.message || "Não foi possível enviar o e-mail.";
-      setMessage(`❌ ${apiMessage}`);
+      Alert.alert(`❌ ${apiMessage}`);
     } finally {
       setForgotLoading(false);
     }
@@ -79,12 +84,19 @@ export default function LoginMoto() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      setMessage("Preencha todos os campos ❌");
+      Alert.alert("Preencha todos os campos");
+      return;
+    }
+    if (!validateEmail(email.trim())) {
+      Alert.alert(
+        "E-mail Inválido",
+        "Por favor, insira um e-mail válido.(ex: nome@email.com).",
+      );
       return;
     }
 
     setLoading(true);
-    setMessage("Autenticando... ⏳");
+    setMessage("Autenticando...");
 
     try {
       const urlLogin =
@@ -125,7 +137,7 @@ export default function LoginMoto() {
         await AsyncStorage.setItem("token", access_token);
         if (user) await AsyncStorage.setItem("user_data", JSON.stringify(user));
 
-        setMessage("Sucesso! Bem-vindo ✅");
+        Alert.alert("Sucesso! Bem-vindo" + " " + user?.name.split(" ")[0]);
         setTimeout(() => {
           setLoading(false);
           router.replace("/motorista/home");
@@ -133,10 +145,39 @@ export default function LoginMoto() {
       }
     } catch (error: any) {
       setLoading(false);
-      const apiMessage = error.response?.data?.message;
-      setMessage(
-        `❌ ${Array.isArray(apiMessage) ? apiMessage[0] : apiMessage || "Credenciais inválidas"}`,
+      console.log(
+        "Erro detalhado:",
+        JSON.stringify(error.response?.data, null, 2),
       );
+
+      const errorData = error.response?.data;
+      let finalMessage = "Email ou senha incorretos!";
+
+      if (errorData) {
+        // 1. Se a mensagem for aquele array de objetos do class-validator
+        if (
+          Array.isArray(errorData.message) &&
+          typeof errorData.message[0] === "object"
+        ) {
+          // Extrai a primeira regra de validação que falhou (ex: 'password must be longer than...')
+          const firstError = errorData.message[0];
+          if (firstError.constraints) {
+            finalMessage = Object.values(firstError.constraints)[0] as string;
+          }
+        }
+        // 2. Se for uma mensagem de string simples ou array de strings comum
+        else if (errorData.message) {
+          finalMessage = Array.isArray(errorData.message)
+            ? errorData.message[0]
+            : errorData.message;
+        }
+        // 3. Fallback para erros do Supabase/Auth
+        else if (errorData.error_description) {
+          finalMessage = errorData.error_description;
+        }
+      }
+
+      Alert.alert("Erro no Login", "Email ou senha incorretos!");
     }
   };
 

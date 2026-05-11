@@ -3,7 +3,10 @@ import axios from "axios";
 import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import {
+  Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -28,10 +31,28 @@ export default function CadastroPassageiro() {
   const openMenu = () => setVisible(true);
   const closeMenu = () => setVisible(false);
 
+  const validateEmail = (email: string) => {
+    // Esta regex exige: texto + @ + texto + . + pelo menos 2 letras no final
+    const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return regex.test(email.trim());
+  };
+
   const handleSubmit = async () => {
     // 1. Validação de Campos Vazios
     if (!name || !email || !password || !servico) {
-      setMessage("Preencha todos os campos! ❌");
+      Alert.alert(
+        "Campos Obrigatórios", // Este é o TÍTULO
+        "Por favor, preencha todos campos para continuar.", // Esta é a MENSAGEM
+        [{ text: "Entendi" }], // Botão de fechar
+      );
+      return;
+    }
+
+    if (!validateEmail(email.trim())) {
+      Alert.alert(
+        "E-mail Inválido",
+        "Por favor, insira um e-mail válido.(ex: nome@email.com).",
+      );
       return;
     }
 
@@ -39,7 +60,11 @@ export default function CadastroPassageiro() {
     const nameTrimmed = name.trim();
     const nameParts = nameTrimmed.split(" ");
     if (nameParts.length < 2 || nameParts[1].length < 1) {
-      setMessage("Por favor, digite seu nome completo. ❌");
+      Alert.alert(
+        "Campos Obrigatórios", // Este é o TÍTULO
+        "Por favor, digite seu nome completo.", // Esta é a MENSAGEM
+        [{ text: "Entendi" }], // Botão de fechar
+      );
       return;
     }
 
@@ -65,7 +90,10 @@ export default function CadastroPassageiro() {
       );
 
       // 3. Mensagem orientando sobre o E-mail de Verificação
-      setMessage("Sucesso! Verifique seu e-mail para ativar a conta. 📧🚀");
+      Alert.alert(
+        "Cadastro Efetuado!",
+        "Sucesso! Verifique seu e-mail para ativar a conta. 📧🚀",
+      );
 
       // Opcional: Limpar campos após sucesso
       setName("");
@@ -77,7 +105,7 @@ export default function CadastroPassageiro() {
     } catch (error: any) {
       const serverMessage =
         error.response?.data?.message || "Erro ao conectar com o servidor";
-      setMessage(`❌ ${serverMessage}`);
+      Alert.alert("Erro", ` ${serverMessage}`);
     } finally {
       setLoading(false);
     }
@@ -86,167 +114,172 @@ export default function CadastroPassageiro() {
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <MaterialCommunityIcons
-              name="arrow-left"
-              size={24}
-              color="#a7c080"
-            />
-          </TouchableOpacity>
-          <Image
-            source={require("../../assets/images/logoLogin.png")}
-            style={styles.logo}
-          />
-        </View>
-
-        <View style={styles.titleSection}>
-          <Text variant="headlineSmall" style={styles.title}>
-            Criar Conta Passageiro
-          </Text>
-          <Text variant="bodyMedium" style={styles.subtitle}>
-            Rápido, fácil e seguro.
-          </Text>
-        </View>
-
-        <Card style={styles.card}>
-          <Card.Content>
-            <TextInput
-              label="Nome Completo"
-              value={name}
-              onChangeText={setName}
-              style={styles.input}
-              mode="flat"
-              textColor="#fff"
-              activeUnderlineColor="#a7c080"
-              theme={{
-                colors: {
-                  onSurfaceVariant: "#ffffff96",
-                  primary: "#a7c080",
-                },
-              }}
-            />
-
-            <TextInput
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              style={styles.input}
-              mode="flat"
-              textColor="#fff"
-              activeUnderlineColor="#a7c080"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              theme={{
-                colors: {
-                  onSurfaceVariant: "#ffffff96",
-                  primary: "#a7c080",
-                },
-              }}
-            />
-
-            <View style={styles.dropdownContainer}>
-              <Menu
-                visible={visible}
-                onDismiss={closeMenu}
-                anchor={
-                  <TouchableOpacity
-                    onPress={openMenu}
-                    style={styles.dropdownTrigger}
-                  >
-                    <TextInput
-                      label="Tipo de Serviço"
-                      value={servico}
-                      editable={false} // Impede digitação, funciona apenas como botão
-                      mode="flat"
-                      style={styles.input}
-                      textColor="#fff"
-                      activeUnderlineColor="#a7c080"
-                      theme={{
-                        colors: {
-                          onSurfaceVariant: "#ffffff96",
-                          primary: "#a7c080",
-                        },
-                      }}
-                      right={
-                        <TextInput.Icon icon="chevron-down" color="#a7c080" />
-                      }
-                    />
-                  </TouchableOpacity>
-                }
-                contentStyle={{ backgroundColor: "#3e4a39" }}
-              >
-                <Menu.Item
-                  onPress={() => {
-                    setServico("Passageiro");
-                    closeMenu();
-                  }}
-                  title="Passageiro"
-                  titleStyle={{ color: "#fff" }}
-                />
-                {/* Você pode adicionar outros itens aqui se quiser expandir no futuro */}
-              </Menu>
-            </View>
-
-            <TextInput
-              label="Senha"
-              value={password}
-              onChangeText={setPassword}
-              style={styles.input}
-              mode="flat"
-              textColor="#fff"
-              activeUnderlineColor="#a7c080"
-              secureTextEntry
-              theme={{
-                colors: {
-                  onSurfaceVariant: "#ffffff96",
-                  primary: "#a7c080",
-                },
-              }}
-            />
-
-            {message ? (
-              <Text
-                style={[
-                  styles.message,
-                  { color: message.includes("❌") ? "#ff7675" : "#a7c080" },
-                ]}
-              >
-                {message}
-              </Text>
-            ) : null}
-
-            <Button
-              mode="contained"
-              onPress={handleSubmit}
-              loading={loading}
-              disabled={loading}
-              style={styles.submitButton}
-              labelStyle={styles.buttonLabel}
-            >
-              {loading ? "Cadastrando..." : "Finalizar Cadastro"}
-            </Button>
-
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
             <TouchableOpacity
-              onPress={() => router.push("/cliente/loginClient" as any)}
-              style={styles.loginLink}
+              onPress={() => router.back()}
+              style={styles.backButton}
             >
-              <Text style={styles.loginText}>
-                Já possui uma conta?{" "}
-                <Text style={styles.loginHighlight}>Login</Text>
-              </Text>
+              <MaterialCommunityIcons
+                name="arrow-left"
+                size={24}
+                color="#a7c080"
+              />
             </TouchableOpacity>
-          </Card.Content>
-        </Card>
-      </ScrollView>
+            <Image
+              source={require("../../assets/images/logoLogin.png")}
+              style={styles.logo}
+            />
+          </View>
+
+          <View style={styles.titleSection}>
+            <Text variant="headlineSmall" style={styles.title}>
+              Criar Conta Passageiro
+            </Text>
+            <Text variant="bodyMedium" style={styles.subtitle}>
+              Rápido, fácil e seguro.
+            </Text>
+          </View>
+
+          <Card style={styles.card}>
+            <Card.Content>
+              <TextInput
+                label="Nome Completo"
+                value={name}
+                onChangeText={setName}
+                style={styles.input}
+                mode="flat"
+                textColor="#fff"
+                activeUnderlineColor="#a7c080"
+                theme={{
+                  colors: {
+                    onSurfaceVariant: "#ffffff96",
+                    primary: "#a7c080",
+                  },
+                }}
+              />
+
+              <TextInput
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                style={styles.input}
+                mode="flat"
+                textColor="#fff"
+                activeUnderlineColor="#a7c080"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                theme={{
+                  colors: {
+                    onSurfaceVariant: "#ffffff96",
+                    primary: "#a7c080",
+                  },
+                }}
+              />
+
+              <View style={styles.dropdownContainer}>
+                <Menu
+                  visible={visible}
+                  onDismiss={closeMenu}
+                  anchor={
+                    <TouchableOpacity
+                      onPress={openMenu}
+                      style={styles.dropdownTrigger}
+                    >
+                      <TextInput
+                        label="Tipo de Serviço"
+                        value={servico}
+                        editable={false} // Impede digitação, funciona apenas como botão
+                        mode="flat"
+                        style={styles.input}
+                        textColor="#fff"
+                        activeUnderlineColor="#a7c080"
+                        theme={{
+                          colors: {
+                            onSurfaceVariant: "#ffffff96",
+                            primary: "#a7c080",
+                          },
+                        }}
+                        right={
+                          <TextInput.Icon icon="chevron-down" color="#a7c080" />
+                        }
+                      />
+                    </TouchableOpacity>
+                  }
+                  contentStyle={{ backgroundColor: "#3e4a39" }}
+                >
+                  <Menu.Item
+                    onPress={() => {
+                      setServico("Passageiro");
+                      closeMenu();
+                    }}
+                    title="Passageiro"
+                    titleStyle={{ color: "#fff" }}
+                  />
+                  {/* Você pode adicionar outros itens aqui se quiser expandir no futuro */}
+                </Menu>
+              </View>
+
+              <TextInput
+                label="Senha"
+                value={password}
+                onChangeText={setPassword}
+                style={styles.input}
+                mode="flat"
+                textColor="#fff"
+                activeUnderlineColor="#a7c080"
+                secureTextEntry
+                theme={{
+                  colors: {
+                    onSurfaceVariant: "#ffffff96",
+                    primary: "#a7c080",
+                  },
+                }}
+              />
+
+              {message ? (
+                <Text
+                  style={[
+                    styles.message,
+                    { color: message.includes("❌") ? "#ff7675" : "#a7c080" },
+                  ]}
+                >
+                  {message}
+                </Text>
+              ) : null}
+
+              <Button
+                mode="contained"
+                onPress={handleSubmit}
+                loading={loading}
+                disabled={loading}
+                style={styles.submitButton}
+                labelStyle={styles.buttonLabel}
+              >
+                {loading ? "Cadastrando..." : "Finalizar Cadastro"}
+              </Button>
+
+              <TouchableOpacity
+                onPress={() => router.push("/cliente/loginClient" as any)}
+                style={styles.loginLink}
+              >
+                <Text style={styles.loginText}>
+                  Já possui uma conta?{" "}
+                  <Text style={styles.loginHighlight}>Login</Text>
+                </Text>
+              </TouchableOpacity>
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   Share,
   StyleSheet,
@@ -79,15 +80,66 @@ export default function PerfilScreen() {
     }, []),
   );
 
-  // Função para compartilhar o ID via WhatsApp/Sistema
   const compartilharNoWhatsapp = async () => {
     try {
       await Share.share({
-        message: `Olá! Sou o motorista ${userData.nome} da TereMobilidade. 🚗\n\nMinha identificação digital: ${userData.id}\n\nAcesse o app para avaliar minha viagem!`,
+        message: `Olá! Sou o motorista ${userData.nome} da TeresópolisMobilidade. 🚗\n\nMinha identificação digital: ${userData.id}\n\nAcesse o app para avaliar minha viagem!`,
       });
     } catch (error: any) {
       console.log("Erro ao compartilhar:", error.message);
     }
+  };
+
+  const excluirConta = async () => {
+    Alert.alert(
+      "Excluir Conta",
+      "Tem certeza que deseja excluir sua conta? Esta ação é irreversível e todos os seus dados serão apagados.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const token = await AsyncStorage.getItem("token");
+
+              // Requisição para o backend deletar o motorista
+              const url =
+                "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api/auth/me";
+
+              await axios.delete(url, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "ngrok-skip-browser-warning": "69420",
+                },
+              });
+
+              // Limpa o armazenamento local
+              await AsyncStorage.clear();
+
+              // Redireciona para o login
+              router.replace("/motorista/loginMoto");
+
+              Alert.alert("Sucesso", "Sua conta foi excluída com sucesso.");
+            } catch (error: any) {
+              console.error("Erro ao excluir conta:", error.message);
+              Alert.alert(
+                "Erro",
+                "Não foi possível excluir sua conta. Tente novamente mais tarde.",
+              );
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // Função para navegar para a tela de edição
+  const irParaEdicao = () => {
+    router.push("/motorista/editarPerfil"); // Certifique-se de que este caminho existe
   };
 
   return (
@@ -102,15 +154,23 @@ export default function PerfilScreen() {
         >
           <MaterialCommunityIcons name="arrow-left" size={28} color="#a7c080" />
         </TouchableOpacity>
+
         <View style={styles.headerTitleContainer}>
           <Text variant="titleLarge" style={styles.headerTitle}>
             Meu Perfil
           </Text>
           <Text variant="bodySmall" style={styles.headerSubtitle}>
-            TereMobilidade
+            TeresópolisMobilidade
           </Text>
         </View>
-        <View style={{ width: 44 }} />
+
+        {/* BOTÃO DE EDITAR NO TOPO */}
+        <TouchableOpacity
+          onPress={irParaEdicao}
+          style={styles.editHeaderButton}
+        >
+          <MaterialCommunityIcons name="pencil" size={24} color="#a7c080" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -125,6 +185,7 @@ export default function PerfilScreen() {
             {userData.nome}
           </Text>
         </View>
+
         {statusMotorista === "aprovado" ? (
           <Card style={styles.qrCard}>
             <Card.Content style={styles.qrContent}>
@@ -135,7 +196,6 @@ export default function PerfilScreen() {
                 Toque no QR Code abaixo para compartilhar via WhatsApp.
               </Text>
 
-              {/* QR Code clicável */}
               <TouchableOpacity
                 onPress={compartilharNoWhatsapp}
                 activeOpacity={0.7}
@@ -176,6 +236,7 @@ export default function PerfilScreen() {
             </Card.Content>
           </Card>
         )}
+
         <Card style={styles.detailsCard}>
           <Card.Content>
             <View style={styles.detailRow}>
@@ -190,22 +251,26 @@ export default function PerfilScreen() {
           </Card.Content>
         </Card>
 
-        {/* BOTÃO DE LOGOUT CORRIGIDO */}
+        {/* BOTÃO DE EDITAR PRINCIPAL */}
+        <Button
+          mode="contained"
+          onPress={irParaEdicao}
+          style={styles.editBtn}
+          icon="account-edit"
+          buttonColor="#a7c080"
+          textColor="#2d3629"
+        >
+          Editar Dados
+        </Button>
+
         <Button
           mode="text"
           textColor="#ff7675"
-          onPress={async () => {
-            try {
-              await AsyncStorage.clear();
-              router.replace("/motorista/loginMoto");
-            } catch (e) {
-              console.error("Erro ao deslogar:", e);
-            }
-          }}
+          onPress={excluirConta} // Chama a função com o alerta de confirmação
           style={styles.logoutBtn}
-          icon="logout"
+          icon="delete-forever" // Mudei o ícone para um mais apropriado
         >
-          Sair da Conta
+          Excluir Conta
         </Button>
       </ScrollView>
     </SafeAreaView>
@@ -222,6 +287,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   backButton: { padding: 8, borderRadius: 12, backgroundColor: "#3e4a39" },
+  editHeaderButton: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: "#3e4a39",
+  },
   headerTitleContainer: { alignItems: "center" },
   headerTitle: { color: "#fff", fontWeight: "bold" },
   headerSubtitle: {
@@ -270,7 +340,8 @@ const styles = StyleSheet.create({
   detailLabel: { color: "#a7c080", fontSize: 11, textTransform: "uppercase" },
   detailValue: { color: "#fff", fontSize: 16, marginTop: 4 },
   divider: { backgroundColor: "rgba(255,255,255,0.1)" },
-  logoutBtn: { marginTop: 20, marginBottom: 40 },
+  editBtn: { marginTop: 20, borderRadius: 10 },
+  logoutBtn: { marginTop: 10, marginBottom: 40 },
   pendingCard: {
     backgroundColor: "#3e4a39",
     borderRadius: 20,

@@ -9,6 +9,7 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -89,7 +90,7 @@ export default function HomePassageiro() {
         <Card style={styles.welcomeCard}>
           <Card.Content>
             <Text variant="headlineSmall" style={styles.welcomeTitle}>
-              Olá, {userName}!
+              Olá, {userName ? userName.split(" ")[0] : "Passageiro"}!
             </Text>
             <Text variant="bodyMedium" style={styles.welcomeSubtitle}>
               Bem-vindo ao TeresópolisMobilidade. Sua segurança é nossa
@@ -120,22 +121,97 @@ export default function HomePassageiro() {
           {[
             {
               img: require("../../assets/images/whatsapp.png"),
-              onPress: () => {
-                const url = "https://wa.me/5521972088235";
-                Linking.openURL(url).catch((err) =>
-                  console.error("Erro ao abrir o WhatsApp", err),
+              onPress: async () => {
+                const phoneNumber = "5521972088235";
+                const message = encodeURIComponent(
+                  "Olá! Preciso de suporte no TeresópolisMobilidade.",
                 );
+
+                // Links para abrir a conversa direta
+                const waUrl = `whatsapp://send?phone=${phoneNumber}&text=${message}`;
+                const waWebUrl = `https://wa.me/${phoneNumber}?text=${message}`;
+
+                // Links da Loja (Fallback)
+                const storeUrl =
+                  Platform.OS === "android"
+                    ? `market://details?id=com.whatsapp`
+                    : `https://apps.apple.com/br/app/id310633997`;
+
+                try {
+                  // Tenta abrir o aplicativo do WhatsApp primeiro
+                  const supported = await Linking.canOpenURL(waUrl);
+
+                  if (supported) {
+                    await Linking.openURL(waUrl);
+                  } else {
+                    // Se não conseguir abrir o 'whatsapp://', tenta o link universal 'wa.me'
+                    // que abre no navegador ou redireciona para a loja
+                    const canOpenWeb = await Linking.canOpenURL(waWebUrl);
+                    if (canOpenWeb) {
+                      await Linking.openURL(waWebUrl);
+                    } else {
+                      // Se tudo falhar, manda para a loja baixar o app
+                      await Linking.openURL(storeUrl);
+                    }
+                  }
+                } catch (err) {
+                  // Em caso de erro crítico, abre a loja
+                  await Linking.openURL(storeUrl);
+                }
               },
             },
             {
               img: require("../../assets/images/digipare.png"),
-              onPress: () =>
-                openStoreOrApp("digipare", "com.digipare.app", "910964529"),
+              onPress: () => {
+                const bundleId = "com.digipare.app"; // ID do Digipare na Play Store
+                const appleId = "910964529"; // ID do Digipare na App Store
+
+                const url =
+                  Platform.OS === "android"
+                    ? `market://details?id=${bundleId}`
+                    : `https://apps.apple.com/br/app/id${appleId}`;
+
+                Linking.canOpenURL(url)
+                  .then((supported) => {
+                    if (supported) {
+                      Linking.openURL(url);
+                    } else {
+                      // Fallback: Abre o link do navegador se o app da loja não responder
+                      Linking.openURL(
+                        `https://play.google.com/store/apps/details?id=${bundleId}`,
+                      );
+                    }
+                  })
+                  .catch((err) =>
+                    console.error("Erro ao abrir o Digipare", err),
+                  );
+              },
             },
             {
               img: require("../../assets/images/vai_de_on.png"),
-              onPress: () =>
-                openStoreOrApp("vai_de_on", "com.VaiDeOn.app", "6464055396"),
+              onPress: () => {
+                const bundleId = "com.VaiDeOn.app"; // ID extraído do link da Play Store
+                const appleId = "6464055396"; // ID do Vai de Ônibus na App Store
+
+                // Se for Android, usa o protocolo 'market', se for iOS, usa o link da App Store
+                const url =
+                  Platform.OS === "android"
+                    ? `market://details?id=${bundleId}`
+                    : `https://apps.apple.com/br/app/id${appleId}`;
+
+                Linking.canOpenURL(url)
+                  .then((supported) => {
+                    if (supported) {
+                      Linking.openURL(url);
+                    } else {
+                      // Se falhar (ex: emulador), abre o link do navegador que você enviou
+                      Linking.openURL(
+                        `https://play.google.com/store/apps/details?id=${bundleId}`,
+                      );
+                    }
+                  })
+                  .catch((err) => console.error("Erro ao abrir a loja", err));
+              },
             },
           ].map((item, index) => (
             <TouchableOpacity
@@ -155,7 +231,7 @@ export default function HomePassageiro() {
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.footerItem}
-          onPress={() => router.replace("/")}
+          onPress={() => router.replace("/cliente/loginClient")}
         >
           <MaterialCommunityIcons name="logout" size={28} color="#a7c080" />
           <Text style={styles.footerLabel}>Sair</Text>
@@ -173,11 +249,43 @@ export default function HomePassageiro() {
 
         <TouchableOpacity
           style={styles.footerItem}
-          onPress={() => {
-            const url = "https://wa.me/5521972088235";
-            Linking.openURL(url).catch((err) =>
-              Alert.alert("Erro", "Não foi possível abrir o WhatsApp"),
+          onPress={async () => {
+            const phoneNumber = "5521972088235";
+            const message = encodeURIComponent(
+              "Olá! Preciso de suporte no TeresópolisMobilidade.",
             );
+
+            // Links de Deep Link e Web
+            const waUrl = `whatsapp://send?phone=${phoneNumber}&text=${message}`;
+            const waWebUrl = `https://wa.me/${phoneNumber}?text=${message}`;
+
+            // Links das Lojas (Caso o app não esteja instalado)
+            const storeUrl =
+              Platform.OS === "android"
+                ? `market://details?id=com.whatsapp`
+                : `https://apps.apple.com/br/app/id310633997`;
+
+            try {
+              // 1. Tenta abrir pelo protocolo do App (whatsapp://)
+              const supported = await Linking.canOpenURL(waUrl);
+
+              if (supported) {
+                await Linking.openURL(waUrl);
+              } else {
+                // 2. Se não abrir o app, tenta o link universal (wa.me) que pode abrir no navegador
+                // ou redirecionar automaticamente.
+                const canOpenWeb = await Linking.canOpenURL(waWebUrl);
+                if (canOpenWeb) {
+                  await Linking.openURL(waWebUrl);
+                } else {
+                  // 3. Fallback final: Abre a página na loja para o usuário baixar
+                  await Linking.openURL(storeUrl);
+                }
+              }
+            } catch (err) {
+              // Se houver qualquer erro no processo, tenta abrir a loja diretamente
+              Linking.openURL(storeUrl);
+            }
           }}
         >
           <MaterialCommunityIcons name="whatsapp" size={28} color="#a7c080" />

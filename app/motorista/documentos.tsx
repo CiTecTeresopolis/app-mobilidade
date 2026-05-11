@@ -15,17 +15,21 @@ import {
 import { ActivityIndicator, Button, Card, Text } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+// Tipos expandidos para cobrir todos os novos documentos
+type DocType = "cnh" | "alvara" | "selfie" | "curso" | "crlv" | "cmc" | "crv";
 type DriverStatus = "pendente" | "analise" | "aprovado";
 
 export default function DocumentosScreen() {
   const router = useRouter();
 
+  // Estados dos documentos
   const [cnh, setCnh] = useState<string | null>(null);
   const [alvara, setAlvara] = useState<string | null>(null);
   const [selfie, setSelfie] = useState<string | null>(null);
   const [docCurso, setDocCurso] = useState<string | null>(null);
   const [crlv, setCrlv] = useState<string | null>(null);
   const [cmc, setCmc] = useState<string | null>(null);
+  const [crv, setCrv] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
@@ -33,28 +37,35 @@ export default function DocumentosScreen() {
     useState<DriverStatus>("pendente");
   const [tipoVeiculo, setTipoVeiculo] = useState<string>("");
 
+  const API_URL =
+    "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api";
+
   const checkUserStatus = async () => {
     try {
       setCheckingStatus(true);
       const token = await AsyncStorage.getItem("token");
-      const response = await axios.get(
-        "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api/drivers/me",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "ngrok-skip-browser-warning": "true",
-          },
+      const response = await axios.get(`${API_URL}/drivers/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "ngrok-skip-browser-warning": "true",
         },
-      );
+      });
 
       const driver = response.data;
       setTipoVeiculo(driver.tipo_servico || "Uber");
 
-      if (driver.ativo === true) setStatusMotorista("aprovado");
-      else if (driver.ativo === false) setStatusMotorista("analise");
-      else setStatusMotorista("pendente");
+      if (driver.status === "REJECTED") {
+        setStatusMotorista("pendente");
+      } else if (driver.ativo === true || driver.status === "APPROVED") {
+        setStatusMotorista("aprovado");
+      } else if (driver.status === "ANALYSIS") {
+        // Se status no banco for PENDING ou ANALYSIS, mostramos tela de análise
+        setStatusMotorista("analise");
+      } else {
+        setStatusMotorista("pendente");
+      }
     } catch (error: any) {
-      console.log("Erro ao buscar status:", error.message);
+      console.error("Erro ao buscar status:", error.message);
       setStatusMotorista("pendente");
     } finally {
       setCheckingStatus(false);
@@ -67,32 +78,36 @@ export default function DocumentosScreen() {
     }, []),
   );
 
+  // Validação dinâmica baseada na categoria
   const canSubmit = () => {
-    if (!cnh) return false;
-    if (tipoVeiculo === "Moto") {
-      return !!(crlv && docCurso && cmc && selfie);
+    switch (tipoVeiculo) {
+      case "Moto":
+        return !!(cnh && selfie && crlv && cmc && docCurso);
+      case "Uber":
+        return !!(cnh && selfie && alvara && crlv);
+      case "Van":
+        return !!(crv && selfie && cnh);
+      case "Táxi":
+        return !!(cnh && crlv && selfie);
+      case "Mudança":
+        return !!(cnh && crlv && selfie);
+      default:
+        return !!(cnh && selfie);
     }
-    return !!(alvara && selfie);
   };
 
-  const pickImage = async (
-    type: "cnh" | "alvara" | "selfie" | "curso" | "crlv" | "cmc",
-  ) => {
+  const pickImage = async (type: DocType) => {
     if (statusMotorista !== "pendente") return;
 
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert(
-        "Permissão Necessária",
-        "Acesse as configurações para permitir a câmera.",
-      );
+      Alert.alert("Permissão Necessária", "Acesso à câmera negado.");
       return;
     }
 
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false, // Desativado para evitar que o editor do Expo aumente o peso do arquivo
-      quality: 0.1, // Qualidade mínima para garantir que o servidor aceite sem mexer no main.ts
+      quality: 0.2,
     });
 
     if (!result.canceled) {
@@ -103,99 +118,93 @@ export default function DocumentosScreen() {
       if (type === "curso") setDocCurso(uri);
       if (type === "crlv") setCrlv(uri);
       if (type === "cmc") setCmc(uri);
+      if (type === "crv") setCrv(uri);
     }
   };
 
   const handleUpload = async () => {
-    if (!canSubmit()) {
-      return Alert.alert(
-        "Atenção",
-        "Capture todos os documentos obrigatórios.",
-      );
-    }
+    if (!canSubmit())
+      return Alert.alert("Atenção", "Capture todos os documentos.");
 
     setLoading(true);
     const formData = new FormData();
 
-    const appendFile = (uri: string, name: string) => {
-      const filename = uri.split("/").pop() || `${name}.jpg`;
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : `image/jpeg`;
-      formData.append(name, { uri, name: filename, type } as any);
+    const appendFile = (uri: string | null, name: string) => {
+      if (uri) {
+        formData.append(name, {
+          uri,
+          name: `${name}.jpg`,
+          type: "image/jpeg",
+        } as any);
+      }
     };
 
-    if (cnh) appendFile(cnh, "cnh");
-    if (selfie) appendFile(selfie, "selfie");
-    if (alvara) appendFile(alvara, "alvara");
-    if (crlv) appendFile(crlv, "crlv");
-    if (docCurso) appendFile(docCurso, "curso");
-    if (cmc) appendFile(cmc, "cmc");
+    appendFile(cnh, "cnh");
+    appendFile(selfie, "selfie");
+    appendFile(alvara, "alvara");
+    appendFile(crlv, "crlv");
+    appendFile(docCurso, "curso");
+    appendFile(cmc, "cmc");
+    appendFile(crv, "crv");
 
     try {
       const token = await AsyncStorage.getItem("token");
-      await axios.post(
-        "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api/auth/register/documents",
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const response = await fetch(`${API_URL}/auth/register/documents`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
 
-      Alert.alert("Sucesso", "Documentos enviados para análise! ✅");
-      await checkUserStatus();
-    } catch (error: any) {
-      console.log("Erro no upload:", error.response?.data || error.message);
-      Alert.alert(
-        "Erro",
-        "Falha ao enviar. Tente tirar as fotos novamente com menos luz.",
-      );
+      if (response.ok) {
+        Alert.alert("Sucesso", "Documentos enviados para análise!");
+        checkUserStatus();
+      } else {
+        throw new Error();
+      }
+    } catch (error) {
+      Alert.alert("Erro", "Falha ao enviar documentos.");
     } finally {
       setLoading(false);
     }
   };
 
   const renderDocumentCards = () => {
-    const docs: {
-      label: string;
-      state: string | null;
-      type: "cnh" | "alvara" | "selfie" | "curso" | "crlv" | "cmc";
-    }[] = [{ label: "CNH do Motorista", state: cnh, type: "cnh" as const }];
+    let docs: { label: string; state: string | null; type: DocType }[] = [];
 
+    // Lógica de cards por categoria
     if (tipoVeiculo === "Moto") {
-      docs.push(
-        { label: "CRLV da Motocicleta", state: crlv, type: "crlv" as const },
-        {
-          label: "Certificado de Motofrete",
-          state: docCurso,
-          type: "curso" as const,
-        },
-        {
-          label: "Inscrição Municipal (CMC)",
-          state: cmc,
-          type: "cmc" as const,
-        },
-        {
-          label: "Selfie com Documento",
-          state: selfie,
-          type: "selfie" as const,
-        },
-      );
-    } else {
-      docs.push(
-        {
-          label: "Alvará / Registro Municipal",
-          state: alvara,
-          type: "alvara" as const,
-        },
-        {
-          label: "Selfie segurando CNH",
-          state: selfie,
-          type: "selfie" as const,
-        },
-      );
+      docs = [
+        { label: "CNH", state: cnh, type: "cnh" },
+        { label: "Selfie com Documento", state: selfie, type: "selfie" },
+        { label: "CRLV da Moto", state: crlv, type: "crlv" },
+        { label: "Inscrição Municipal (CMC)", state: cmc, type: "cmc" },
+        { label: "Certificado de Motofrete", state: docCurso, type: "curso" },
+      ];
+    } else if (tipoVeiculo === "Uber") {
+      docs = [
+        { label: "CNH", state: cnh, type: "cnh" },
+        { label: "Selfie com Documento", state: selfie, type: "selfie" },
+        { label: "Alvará / Registro", state: alvara, type: "alvara" },
+        { label: "CRLV do Veículo", state: crlv, type: "crlv" },
+      ];
+    } else if (tipoVeiculo === "Van") {
+      docs = [
+        { label: "CRV", state: crv, type: "crv" },
+        { label: "Selfie com Documento", state: selfie, type: "selfie" },
+        { label: "CNH", state: cnh, type: "cnh" },
+      ];
+    } else if (tipoVeiculo === "Táxi") {
+      docs = [
+        { label: "CNH", state: cnh, type: "cnh" },
+        { label: "CRLV", state: crlv, type: "crlv" },
+        { label: "Selfie com Documento", state: selfie, type: "selfie" },
+      ];
+    } else if (tipoVeiculo === "Mudança") {
+      docs = [
+        { label: "CNH", state: cnh, type: "cnh" },
+        { label: "CRLV", state: crlv, type: "crlv" },
+        { label: "Selfie com Documento", state: selfie, type: "selfie" },
+      ];
     }
 
     return docs.map((item, index) => (
@@ -269,7 +278,7 @@ export default function DocumentosScreen() {
               style={[styles.uploadBtn, !canSubmit() && { opacity: 0.5 }]}
               labelStyle={styles.uploadLabel}
             >
-              {loading ? "Enviando..." : "Enviar para Análise"}
+              Enviar para Análise
             </Button>
           </>
         ) : (
@@ -338,7 +347,7 @@ const styles = StyleSheet.create({
   },
   titleSection: { marginBottom: 25, alignItems: "center" },
   title: { color: "#fff", fontWeight: "bold" },
-  subtitle: { color: "#a7c080", fontSize: 16, marginTop: 5, fontWeight: "500" },
+  subtitle: { color: "#a7c080", fontSize: 16, marginTop: 5 },
   statusView: { marginTop: 40 },
   statusCard: { backgroundColor: "#3e4a39", padding: 20, borderRadius: 15 },
   borderSuccess: { borderColor: "#a7c080", borderWidth: 1 },
@@ -357,11 +366,6 @@ const styles = StyleSheet.create({
   cardLabel: { color: "#fff" },
   cameraBtn: { borderColor: "#a7c080", marginTop: 10 },
   preview: { width: "100%", height: 200, borderRadius: 8, marginTop: 10 },
-  uploadBtn: {
-    marginTop: 20,
-    backgroundColor: "#a7c080",
-    borderRadius: 12,
-    paddingVertical: 6,
-  },
-  uploadLabel: { color: "#2d3629", fontWeight: "bold", fontSize: 16 },
+  uploadBtn: { marginTop: 20, backgroundColor: "#a7c080", borderRadius: 12 },
+  uploadLabel: { color: "#2d3629", fontWeight: "bold" },
 });

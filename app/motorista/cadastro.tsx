@@ -5,6 +5,8 @@ import { useState } from "react";
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -33,36 +35,10 @@ export default function Cadastro() {
   const [forgotLoading, setForgotLoading] = useState(false); // Novo estado de loading
 
   const tipos = ["Uber", "Táxi", "Moto", "Van", "Mudança"];
-
-  // Lógica para Esqueci Minha Senha
-  const handleForgotPassword = async () => {
-    if (!email) {
-      setMessage("Digite seu e-mail para recuperar a senha! 📧");
-      return;
-    }
-
-    setForgotLoading(true);
-    setMessage("");
-
-    try {
-      await axios.post(
-        "https://pilgrimatic-nita-scenographically.ngrok-free.dev/api/auth/reset-password",
-        { email: email.trim().toLowerCase() },
-        {
-          headers: { "ngrok-skip-browser-warning": "true" },
-        },
-      );
-      Alert.alert(
-        "Sucesso",
-        "E-mail de recuperação enviado! Verifique sua caixa de entrada. 🚀",
-      );
-    } catch (error: any) {
-      const serverMessage =
-        error.response?.data?.message || "Erro ao solicitar recuperação";
-      setMessage(`❌ ${serverMessage}`);
-    } finally {
-      setForgotLoading(false);
-    }
+  const validateEmail = (email: string) => {
+    // Esta regex exige: texto + @ + texto + . + pelo menos 2 letras no final
+    const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return regex.test(email.trim());
   };
 
   const handleSubmit = async () => {
@@ -76,14 +52,21 @@ export default function Cadastro() {
       !placa ||
       !modelo
     ) {
-      setMessage("Preencha todos os campos! ❌");
+      Alert.alert("Campos Obrigatórios", "Preencha todos os campos!");
       return;
     }
 
     // 2. Validação de Nome Completo
     const nomeLimpo = name.trim();
     if (nomeLimpo.split(/\s+/).length < 2) {
-      setMessage("Digite seu nome completo (Nome e Sobrenome) 👤");
+      Alert.alert("Campos Obrigatórios", "Digite seu nome completo");
+      return;
+    }
+    if (!validateEmail(email.trim())) {
+      Alert.alert(
+        "E-mail Inválido",
+        "Por favor, insira um e-mail válido.(ex: nome@email.com).",
+      );
       return;
     }
 
@@ -93,7 +76,7 @@ export default function Cadastro() {
     const cnhRepetida = /^(\d)\1{10}$/.test(cnhLimpa);
 
     if (!cnhRegex.test(cnhLimpa) || cnhRepetida) {
-      setMessage("CNH inválida! Digite os 11 números corretamente. 🪪");
+      Alert.alert("CNH inválida! Digite os 11 números corretamente.");
       return;
     }
 
@@ -101,7 +84,7 @@ export default function Cadastro() {
     const placaLimpa = placa.toUpperCase().replace("-", "").trim();
     const placaRegex = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
     if (!placaRegex.test(placaLimpa)) {
-      setMessage("Placa do veículo inválida! 🚗");
+      Alert.alert("Placa do veículo inválida! 🚗");
       return;
     }
 
@@ -116,7 +99,7 @@ export default function Cadastro() {
           password,
           name: nomeLimpo,
           cnh: cnhLimpa,
-          tipo_servico: tipoServico,
+          tipo_servico: tipoServico.toLowerCase(),
           placa: placaLimpa,
           veiculo_modelo: modelo.trim(),
         },
@@ -129,12 +112,15 @@ export default function Cadastro() {
         },
       );
 
-      setMessage("Cadastro realizado! Verifique seu e-mail para confirmar. 🚀");
+      Alert.alert(
+        "Cadastro realizado",
+        "Cadastro realizado! Verifique seu e-mail para confirmar. 🚀",
+      );
       setTimeout(() => router.replace("/"), 3000);
     } catch (error: any) {
       const serverMessage =
         error.response?.data?.message || "Erro ao conectar com o servidor";
-      setMessage(`❌ ${serverMessage}`);
+      Alert.alert(` ${serverMessage}`);
     } finally {
       setLoading(false);
     }
@@ -144,211 +130,215 @@ export default function Cadastro() {
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <MaterialCommunityIcons
-              name="arrow-left"
-              size={24}
-              color="#a7c080"
-            />
-          </TouchableOpacity>
-          <Image
-            source={require("../../assets/images/logoLogin.png")}
-            style={styles.logo}
-          />
-        </View>
-
-        <View style={styles.titleSection}>
-          <Text variant="headlineSmall" style={styles.title}>
-            Criar Conta
-          </Text>
-          <Text variant="bodyMedium" style={styles.subtitle}>
-            Cadastre seu veículo no TereMobilidade
-          </Text>
-        </View>
-
-        <Card style={styles.card}>
-          <Card.Content>
-            {/* ... (campos de Nome, CNH, Modelo, Placa e Tipo de Serviço permanecem iguais) ... */}
-
-            <TextInput
-              label="Nome Completo"
-              value={name}
-              onChangeText={setName}
-              style={styles.input}
-              mode="flat"
-              textColor="#fff"
-              activeUnderlineColor="#a7c080"
-              theme={{
-                colors: { onSurfaceVariant: "#ffffff96", primary: "#a7c080" },
-              }}
-            />
-
-            <TextInput
-              label="CNH (11 dígitos)"
-              value={cnh}
-              onChangeText={(txt) => setCnh(txt.replace(/[^0-9]/g, ""))}
-              style={styles.input}
-              mode="flat"
-              textColor="#fff"
-              maxLength={11}
-              keyboardType="numeric"
-              activeUnderlineColor="#a7c080"
-              theme={{
-                colors: { onSurfaceVariant: "#ffffff96", primary: "#a7c080" },
-              }}
-            />
-
-            <TextInput
-              label="Modelo do Veículo"
-              value={modelo}
-              onChangeText={setModelo}
-              style={styles.input}
-              mode="flat"
-              textColor="#fff"
-              placeholder="Ex: Fiat Uno"
-              activeUnderlineColor="#a7c080"
-              theme={{
-                colors: { onSurfaceVariant: "#ffffff96", primary: "#a7c080" },
-              }}
-            />
-
-            <TextInput
-              label="Placa"
-              value={placa}
-              onChangeText={(txt) => setPlaca(txt.toUpperCase())}
-              style={styles.input}
-              mode="flat"
-              textColor="#fff"
-              placeholder="ABC-1234"
-              maxLength={8}
-              activeUnderlineColor="#a7c080"
-              theme={{
-                colors: { onSurfaceVariant: "#ffffff96", primary: "#a7c080" },
-              }}
-            />
-
-            <View style={styles.menuContainer}>
-              <Menu
-                visible={menuVisible}
-                onDismiss={() => setMenuVisible(false)}
-                anchor={
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => setMenuVisible(true)}
-                    style={styles.dropdownTrigger}
-                  >
-                    <View pointerEvents="none">
-                      <TextInput
-                        label="Tipo de Serviço"
-                        value={tipoServico}
-                        mode="flat"
-                        textColor="#fff"
-                        activeUnderlineColor="#a7c080"
-                        theme={{
-                          colors: {
-                            onSurfaceVariant: "#ffffff96",
-                            primary: "#a7c080",
-                          },
-                        }}
-                        right={
-                          <TextInput.Icon
-                            icon={menuVisible ? "chevron-up" : "chevron-down"}
-                            color="#a7c080"
-                          />
-                        }
-                        style={{ backgroundColor: "transparent" }}
-                      />
-                    </View>
-                  </TouchableOpacity>
-                }
-                contentStyle={styles.menuContent}
-              >
-                {tipos.map((item) => (
-                  <Menu.Item
-                    key={item}
-                    onPress={() => {
-                      setTipoServico(item);
-                      setMenuVisible(false);
-                    }}
-                    title={item}
-                    titleStyle={{ color: "#fff" }}
-                  />
-                ))}
-              </Menu>
-            </View>
-
-            <TextInput
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              style={styles.input}
-              mode="flat"
-              textColor="#fff"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              activeUnderlineColor="#a7c080"
-              theme={{
-                colors: { onSurfaceVariant: "#ffffff96", primary: "#a7c080" },
-              }}
-            />
-
-            <TextInput
-              label="Senha"
-              value={password}
-              onChangeText={setPassword}
-              style={styles.input}
-              mode="flat"
-              textColor="#fff"
-              secureTextEntry
-              activeUnderlineColor="#a7c080"
-              theme={{
-                colors: { onSurfaceVariant: "#ffffff96", primary: "#a7c080" },
-              }}
-            />
-
-            {/* BOTÃO ESQUECI MINHA SENHA */}
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
             <TouchableOpacity
-              onPress={handleForgotPassword}
-              disabled={forgotLoading}
-              style={styles.forgotPasswordContainer}
+              onPress={() => router.back()}
+              style={styles.backButton}
             >
-              <Text style={styles.forgotPasswordText}>
-                {forgotLoading ? "Enviando..." : "Esqueci minha senha"}
-              </Text>
+              <MaterialCommunityIcons
+                name="arrow-left"
+                size={24}
+                color="#a7c080"
+              />
             </TouchableOpacity>
+            <Image
+              source={require("../../assets/images/logoLogin.png")}
+              style={styles.logo}
+            />
+          </View>
 
-            {message ? (
-              <Text
-                style={[
-                  styles.message,
-                  { color: message.includes("❌") ? "#ff7675" : "#a7c080" },
-                ]}
+          <View style={styles.titleSection}>
+            <Text variant="headlineSmall" style={styles.title}>
+              Criar Conta
+            </Text>
+            <Text variant="bodyMedium" style={styles.subtitle}>
+              Cadastre seu veículo no Teresópolis Mobilidade
+            </Text>
+          </View>
+
+          <Card style={styles.card}>
+            <Card.Content>
+              {/* ... (campos de Nome, CNH, Modelo, Placa e Tipo de Serviço permanecem iguais) ... */}
+
+              <TextInput
+                label="Nome Completo"
+                value={name}
+                onChangeText={setName}
+                style={styles.input}
+                mode="flat"
+                textColor="#fff"
+                activeUnderlineColor="#a7c080"
+                theme={{
+                  colors: { onSurfaceVariant: "#ffffff96", primary: "#a7c080" },
+                }}
+              />
+
+              <TextInput
+                label="CNH (11 dígitos)"
+                value={cnh}
+                onChangeText={(txt) => setCnh(txt.replace(/[^0-9]/g, ""))}
+                style={styles.input}
+                mode="flat"
+                textColor="#fff"
+                maxLength={11}
+                keyboardType="numeric"
+                activeUnderlineColor="#a7c080"
+                theme={{
+                  colors: { onSurfaceVariant: "#ffffff96", primary: "#a7c080" },
+                }}
+              />
+
+              <TextInput
+                label="Modelo do Veículo"
+                value={modelo}
+                onChangeText={setModelo}
+                style={styles.input}
+                mode="flat"
+                textColor="#fff"
+                placeholder="Ex: Fiat Uno"
+                activeUnderlineColor="#a7c080"
+                theme={{
+                  colors: { onSurfaceVariant: "#ffffff96", primary: "#a7c080" },
+                }}
+              />
+
+              <TextInput
+                label="Placa"
+                value={placa}
+                onChangeText={(txt) => setPlaca(txt.toUpperCase())}
+                style={styles.input}
+                mode="flat"
+                textColor="#fff"
+                placeholder="ABC-1234"
+                maxLength={8}
+                activeUnderlineColor="#a7c080"
+                theme={{
+                  colors: { onSurfaceVariant: "#ffffff96", primary: "#a7c080" },
+                }}
+              />
+
+              <View style={styles.menuContainer}>
+                <Menu
+                  visible={menuVisible}
+                  onDismiss={() => setMenuVisible(false)}
+                  anchor={
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => setMenuVisible(true)}
+                      style={styles.dropdownTrigger}
+                    >
+                      <View pointerEvents="none">
+                        <TextInput
+                          label="Tipo de Serviço"
+                          value={tipoServico}
+                          mode="flat"
+                          textColor="#fff"
+                          activeUnderlineColor="#a7c080"
+                          theme={{
+                            colors: {
+                              onSurfaceVariant: "#ffffff96",
+                              primary: "#a7c080",
+                            },
+                          }}
+                          right={
+                            <TextInput.Icon
+                              icon={menuVisible ? "chevron-up" : "chevron-down"}
+                              color="#a7c080"
+                            />
+                          }
+                          style={{ backgroundColor: "transparent" }}
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  }
+                  contentStyle={styles.menuContent}
+                >
+                  {tipos.map((item) => (
+                    <Menu.Item
+                      key={item}
+                      onPress={() => {
+                        setTipoServico(item);
+                        setMenuVisible(false);
+                      }}
+                      title={item}
+                      titleStyle={{ color: "#fff" }}
+                    />
+                  ))}
+                </Menu>
+              </View>
+
+              <TextInput
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                style={styles.input}
+                mode="flat"
+                textColor="#fff"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                activeUnderlineColor="#a7c080"
+                theme={{
+                  colors: { onSurfaceVariant: "#ffffff96", primary: "#a7c080" },
+                }}
+              />
+
+              <TextInput
+                label="Senha"
+                value={password}
+                onChangeText={setPassword}
+                style={styles.input}
+                mode="flat"
+                textColor="#fff"
+                secureTextEntry
+                activeUnderlineColor="#a7c080"
+                theme={{
+                  colors: { onSurfaceVariant: "#ffffff96", primary: "#a7c080" },
+                }}
+              />
+
+              {message ? (
+                <Text
+                  style={[
+                    styles.message,
+                    { color: message.includes("❌") ? "#ff7675" : "#a7c080" },
+                  ]}
+                >
+                  {message}
+                </Text>
+              ) : null}
+
+              <Button
+                mode="contained"
+                onPress={handleSubmit}
+                loading={loading}
+                disabled={loading}
+                style={styles.submitButton}
+                labelStyle={styles.buttonLabel}
               >
-                {message}
-              </Text>
-            ) : null}
-
-            <Button
-              mode="contained"
-              onPress={handleSubmit}
-              loading={loading}
-              disabled={loading}
-              style={styles.submitButton}
-              labelStyle={styles.buttonLabel}
-            >
-              Finalizar Cadastro
-            </Button>
-          </Card.Content>
-        </Card>
-      </ScrollView>
+                Finalizar Cadastro
+              </Button>
+              <TouchableOpacity
+                onPress={() => router.push("/motorista/loginMoto" as any)}
+                style={styles.loginLink}
+              >
+                <Text style={styles.loginText}>
+                  Já possui uma conta?{" "}
+                  <Text style={styles.loginHighlight}>Login</Text>
+                </Text>
+              </TouchableOpacity>
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -408,4 +398,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 14,
   },
+  loginLink: { marginTop: 20, alignItems: "center" },
+  loginText: { color: "#8a9685" },
+  loginHighlight: { color: "#a7c080", fontWeight: "bold" },
 });
